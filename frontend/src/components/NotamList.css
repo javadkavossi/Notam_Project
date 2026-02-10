@@ -1,0 +1,115 @@
+.notam-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow-y: auto;
+  padding-left: 0.25rem;
+}
+
+.notam-list.loading {
+  opacity: 0.8;
+}
+
+.notam-empty {
+  padding: 3rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.notam-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.notam-card:hover {
+  border-color: var(--accent);
+}
+
+.notam-card.expanded {
+  border-color: var(--accent);
+}
+
+.notam-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.notam-header .series {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.notam-header .event-type {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+}
+
+.notam-header .event-N {
+  background: rgba(0, 212, 170, 0.2);
+  color: var(--accent);
+}
+
+.notam-header .event-R {
+  background: rgba(255, 173, 31, 0.2);
+  color: var(--warning);
+}
+
+.notam-header .event-C {
+  background: rgba(244, 33, 46, 0.2);
+  color: var(--danger);
+}
+
+.notam-header .location {
+  font-weight: 500;
+}
+
+.notam-header .airport-icao,
+.notam-header .fir {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.notam-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.notam-preview {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.notam-detail {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.notam-detail .formatted-text {
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+}
+
+.expand-hint {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}

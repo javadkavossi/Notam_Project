@@ -1,0 +1,64 @@
+/* Dark mode + ensure toasts appear above everything (container may be portaled to body) */
+:root {
+  --toastify-color-dark: #1a1a1a;
+  --toastify-toast-width: 520px;
+}
+
+body .notam-toast-container,
+body .Toastify__toast-container,
+.notam-toast-container,
+.Toastify__toast-container {
+  z-index: 99999 !important;
+  position: fixed !important;
+  pointer-events: none;
+}
+
+body .Toastify__toast,
+.Toastify__toast {
+  pointer-events: auto !important;
+  width: var(--toastify-toast-width) !important;
+  min-width: 420px !important;
+  max-width: 560px !important;
+}
+
+.Toastify__toast-container--top-center {
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.Toastify__toast {
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+  min-height: auto;
+}
+
+/* Force dark theme for all toasts */
+.Toastify__toast-theme--dark,
+.Toastify__toast-theme--colored {
+  color: #fff;
+}
+
+/* جدید (N) = سبز */
+.Toastify__toast--success {
+  background: linear-gradient(135deg, #15803d 0%, #16a34a 100%);
+  color: #fff;
+}
+
+/* جایگزین (R) = نارنجی */
+.Toastify__toast--warning {
+  background: linear-gradient(135deg, #c2410c 0%, #ea580c 100%);
+  color: #fff;
+}
+
+/* لغو (C) = قرمز */
+.Toastify__toast--error {
+  background: linear-gradient(135deg, #b91c1c 0%, #ef4444 100%);
+  color: #fff;
+}
+
+.Toastify__toast--info {
+  background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%);
+  color: #fff;
+}

@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  notam-consumer:
+    build:
+      context: ./src
+      dockerfile: Dockerfile
+    image: notam-consumer:latest
+    container_name: faa-notam-consumer
+    restart: unless-stopped
+    environment:
+      - APP_ENV=docker
+      - TZ=Asia/Tehran
+      - AUTH_USER=admin
+      - AUTH_PASS=admin
+      - SOLACE_HOST=tcps://ems2.swim.faa.gov:55443
+      - SOLACE_VPN=AIM_FNS
+      - SOLACE_USERNAME=hossein.kavosi2.gmail.com
+      - SOLACE_PASSWORD=GK5F9tZFRnqhucFniZhoOw
+      - SOLACE_QUEUE=hossein.kavosi2.gmail.com.AIM_FNS.1696ec1b-7b8d-41e3-8e96-90f62d821170.OUT
+    ports:
+      - "5005:5005"
+    volumes:
+      - ./src/logs:/app/logs
+    networks:
+      - notam_network
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: notam_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: notam_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    networks:
+      - notam_network
+    restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: notam_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "8091:80"
+    networks:
+      - notam_network
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: notam-frontend
+    ports:
+      - "3000:80"
+    networks:
+      - notam_network
+    depends_on:
+      - notam-consumer
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: notam_redis
+    command: ["redis-server", "/etc/redis/redis.conf"]
+    volumes:
+      - ./docker/redis/redis.conf:/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    networks:
+      - notam_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+
+networks:
+  notam_network:
+    driver: bridge

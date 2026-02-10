@@ -1,0 +1,32 @@
+# Binary & build artifacts
+notam-consumer
+__debug_bin*
+*.exe
+
+# Git
+.git
+.gitignore
+
+# IDE & editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# Logs
+logs
+*.log
+
+# Documentation (keep docs/ - swagger)
+*.md
+src_files.txt
+third_party_files.txt
+
+# Other Dockerfiles (not needed for build)
+Dockerfile*
+docker-compose*.yml
+
+# Test & misc
+*.test
+query
+cleanup.sh

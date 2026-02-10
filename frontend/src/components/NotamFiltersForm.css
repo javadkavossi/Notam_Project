@@ -1,0 +1,64 @@
+.filters-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.filter-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.filter-row label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.filter-row input,
+.filter-row select {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  color: var(--text);
+}
+
+.filter-row input:focus,
+.filter-row select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.filter-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.btn-apply {
+  flex: 1;
+  background: var(--accent);
+  color: var(--bg-dark);
+  border: none;
+  padding: 0.5rem;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.btn-apply:hover {
+  background: var(--accent-dim);
+}
+
+.btn-clear {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+}
+
+.btn-clear:hover {
+  border-color: var(--text-muted);
+  color: var(--text);
+}

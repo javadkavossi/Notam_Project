@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 	"time"
 
@@ -153,11 +154,14 @@ func (c *SolaceQueueConsumer) Start(handler func(Message)) error {
 			}
 
 			if refType != "" {
-				fields := strings.Fields(event.Text)
-				for _, f := range fields {
-					if len(f) == 9 && strings.HasPrefix(f, event.Series) && strings.Contains(f, "/") {
-						refNumber = f
-						break
+				refRe := regexp.MustCompile(`\b([A-Z0-9]{1,6}/\d{2})\b`)
+				for _, m := range refRe.FindAllStringSubmatch(event.Text, -1) {
+					if len(m) >= 2 {
+						cand := strings.TrimSpace(m[1])
+						if cand != "" && cand != currentNumber {
+							refNumber = cand
+							break
+						}
 					}
 				}
 			}
@@ -168,7 +172,8 @@ func (c *SolaceQueueConsumer) Start(handler func(Message)) error {
 				sb.WriteString(fmt.Sprintf("%s NOTAM%s\n", currentNumber, event.EventType))
 			}
 
-			if event.AffectedFIR != "" {
+			// بند Q برای NOTAMC طبق استاندارد نمایش داده نمی‌شود
+			if refType != "NOTAMC" && event.AffectedFIR != "" {
 				sb.WriteString("Q) " + event.AffectedFIR + "/QWMLW/IV/BO/W/000/999/\n")
 			}
 

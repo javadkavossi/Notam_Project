@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import type { NotamItem } from '../api/client'
+import { getCancelledNotamRef, getCancelledNotamDisplayText } from '../utils/notamCancel'
 import './NotamNotification.css'
 
 interface Props {
@@ -59,8 +60,13 @@ export default function NotamNotificationContent({ notam, closeToast }: Props) {
       <div className="notam-notif-body">
         <div className="notam-notif-copy-row">
           <Copyable value={n.seriesNumber} label="Serial" />
-          <Copyable value={n.affectedFir ?? ''} label="FIR" />
+          {n.eventType !== 'C' && <Copyable value={n.affectedFir ?? ''} label="FIR" />}
         </div>
+        {n.eventType === 'C' && getCancelledNotamRef(n.formattedText, n.plainText) && (
+          <div className="notam-notif-row notam-notif-cancelled-ref">
+            <span className="notam-notif-label">Cancelled NOTAM:</span> {getCancelledNotamRef(n.formattedText, n.plainText)}
+          </div>
+        )}
         <div className="notam-notif-meta">
           {n.airportIcao && <span className="notam-notif-badge">{n.airportIcao}</span>}
           {n.locationIcao && n.locationIcao !== n.airportIcao && (
@@ -83,7 +89,9 @@ export default function NotamNotificationContent({ notam, closeToast }: Props) {
             {[n.lowerLimit, n.upperLimit].filter(Boolean).join(' - ')}
           </div>
         )}
-        <pre className="notam-notif-text">{n.plainText}</pre>
+        <pre className="notam-notif-text">
+          {n.eventType === 'C' ? getCancelledNotamDisplayText(n.plainText, n.formattedText) : n.plainText}
+        </pre>
       </div>
     </div>
   )

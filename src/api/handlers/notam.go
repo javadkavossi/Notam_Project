@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -339,6 +340,34 @@ func (h *NotamHandler) List(c *gin.Context) {
 		Items:      items,
 		TotalCount: total,
 	}, true, helper.Success))
+}
+
+// GetBySeries godoc
+// @Summary Get NOTAM by series number
+// @Description دریافت یک NOTAM با شماره سریال (برای نمایش NOTAM لغو‌شده)
+// @Tags notams
+// @Produce json
+// @Param series query string true "شماره سریال مثلاً A0524/26"
+// @Success 200 {object} helper.BaseHttpResponse
+// @Router /api/v1/notams/by-series [get]
+func (h *NotamHandler) GetBySeries(c *gin.Context) {
+	series := strings.TrimSpace(c.Query("series"))
+	if series == "" {
+		c.JSON(http.StatusBadRequest, helper.GenerateBaseResponse(nil, false, helper.ValidationError))
+		return
+	}
+
+	var n model.Notam
+	if err := db.GetDb().Where("series_number = ?", series).Order("effective_start DESC").First(&n).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, helper.GenerateBaseResponse(nil, false, helper.NotFoundError))
+			return
+		}
+		c.JSON(http.StatusInternalServerError, helper.GenerateBaseResponseWithError(nil, false, helper.InternalError, err))
+		return
+	}
+
+	c.JSON(http.StatusOK, helper.GenerateBaseResponse(notamToItem(n), true, helper.Success))
 }
 
 // GetByID godoc

@@ -113,6 +113,11 @@
   font-size: 0.8rem;
 }
 
+.notam-notif-cancelled-ref {
+  font-weight: 600;
+  color: #fecaca;
+}
+
 .notam-notif-text {
   margin: 0.5rem 0 0;
   padding: 0.4rem 0.5rem;

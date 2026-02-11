@@ -170,3 +170,12 @@ export async function fetchNotams(filters: NotamFilters = {}): Promise<ListRespo
   }
   return data.result
 }
+
+/** دریافت یک NOTAM با شماره سریال (برای نمایش NOTAM لغو‌شده در پاپ‌آپ) */
+export async function fetchNotamBySeriesNumber(series: string): Promise<NotamItem | null> {
+  const res = await fetch(`${BASE}/notams/by-series?series=${encodeURIComponent(series)}`)
+  const data = await res.json()
+  if (res.status === 404 || !data.success) return null
+  if (!data.result) return null
+  return data.result as NotamItem
+}

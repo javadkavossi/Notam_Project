@@ -77,6 +77,62 @@
   color: var(--text-muted);
 }
 
+.notam-cancelled-ref {
+  font-size: 0.85rem;
+  color: var(--danger);
+  margin-bottom: 0.35rem;
+  font-weight: 500;
+}
+
+.notam-cancelled-ref-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.notam-cancelled-ref-btn:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.notam-cancelled-ref-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.notam-replaced-ref {
+  font-size: 0.85rem;
+  color: var(--warning);
+  margin-bottom: 0.35rem;
+  font-weight: 500;
+}
+
+.notam-replaced-ref-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.notam-replaced-ref-btn:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.notam-replaced-ref-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
 .notam-meta {
   display: flex;
   flex-wrap: wrap;

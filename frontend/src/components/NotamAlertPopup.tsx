@@ -1,10 +1,18 @@
 import { useState, useCallback } from 'react'
 import type { NotamItem } from '../api/client'
+import {
+  getCancelledNotamRef,
+  getCancelledNotamDisplayText,
+  getReplacedNotamRef,
+  getReplacedNotamDisplayText,
+} from '../utils/notamCancel'
 import './NotamAlertPopup.css'
 
 interface Props {
   notam: NotamItem
   onClose: () => void
+  onOpenCancelledNotam?: (series: string) => void
+  onOpenReplacedNotam?: (series: string) => void
 }
 
 function formatDate(s: string): string {
@@ -52,8 +60,15 @@ function Copyable({ value, label }: { value: string; label: string }) {
   )
 }
 
-export default function NotamAlertPopup({ notam, onClose }: Props) {
+export default function NotamAlertPopup({
+  notam,
+  onClose,
+  onOpenCancelledNotam,
+  onOpenReplacedNotam,
+}: Props) {
   const n = notam
+  const cancelledRef = getCancelledNotamRef(n.formattedText, n.plainText)
+  const replacedRef = getReplacedNotamRef(n.formattedText, n.plainText)
 
   return (
     <div className="notam-alert-overlay" role="dialog" aria-modal="true" aria-labelledby="notam-alert-title">
@@ -67,7 +82,7 @@ export default function NotamAlertPopup({ notam, onClose }: Props) {
         <div className="notam-alert-body">
           <div className="notam-alert-meta">
             <Copyable value={n.seriesNumber} label="سریال" />
-            <Copyable value={n.affectedFir ?? ''} label="FIR" />
+            {n.eventType !== 'C' && <Copyable value={n.affectedFir ?? ''} label="FIR" />}
             {n.airportIcao && <span className="notam-alert-badge">{n.airportIcao}</span>}
             {n.locationIcao && n.locationIcao !== n.airportIcao && (
               <span className="notam-alert-badge">{n.locationIcao}</span>
@@ -81,6 +96,40 @@ export default function NotamAlertPopup({ notam, onClose }: Props) {
               </span>
             )}
           </div>
+          {n.eventType === 'C' && cancelledRef && (
+            <div className="notam-alert-row notam-alert-cancelled-ref">
+              <span className="notam-alert-row-label">NOTAM لغو‌شده:</span>{' '}
+              {onOpenCancelledNotam ? (
+                <button
+                  type="button"
+                  className="notam-alert-cancelled-ref-btn"
+                  onClick={() => onOpenCancelledNotam(cancelledRef)}
+                  title="مشاهده جزئیات NOTAM لغو‌شده"
+                >
+                  {cancelledRef}
+                </button>
+              ) : (
+                cancelledRef
+              )}
+            </div>
+          )}
+          {n.eventType === 'R' && replacedRef && (
+            <div className="notam-alert-row notam-alert-replaced-ref">
+              <span className="notam-alert-row-label">NOTAM جایگزین‌شده:</span>{' '}
+              {onOpenReplacedNotam ? (
+                <button
+                  type="button"
+                  className="notam-alert-replaced-ref-btn"
+                  onClick={() => onOpenReplacedNotam(replacedRef)}
+                  title="مشاهده جزئیات NOTAM جایگزین‌شده"
+                >
+                  {replacedRef}
+                </button>
+              ) : (
+                replacedRef
+              )}
+            </div>
+          )}
           {n.airportName && (
             <div className="notam-alert-row">
               <span className="notam-alert-row-label">فرودگاه:</span> {n.airportName}
@@ -97,7 +146,13 @@ export default function NotamAlertPopup({ notam, onClose }: Props) {
               {[n.lowerLimit, n.upperLimit].filter(Boolean).join(' - ')}
             </div>
           )}
-          <pre className="notam-alert-text">{n.plainText}</pre>
+          <pre className="notam-alert-text">
+            {n.eventType === 'C'
+              ? getCancelledNotamDisplayText(n.plainText, n.formattedText)
+              : n.eventType === 'R'
+                ? getReplacedNotamDisplayText(n.plainText, n.formattedText)
+                : n.plainText}
+          </pre>
         </div>
         <div className="notam-alert-footer">
           <button type="button" className="btn-alert-close" onClick={onClose}>

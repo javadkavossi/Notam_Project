@@ -4,12 +4,14 @@ import { useAuth } from '../contexts/AuthContext'
 import {
   fetchNotams,
   fetchRecentNotams,
+  fetchNotamBySeriesNumber,
   type NotamItem,
   type NotamFilters,
   type AlertSettings,
 } from '../api/client'
 import NotamFiltersForm from '../components/NotamFiltersForm'
 import NotamList from '../components/NotamList'
+import NotamAlertPopup from '../components/NotamAlertPopup'
 import PaginationBar from '../components/PaginationBar'
 import AlertSettingsModal from '../components/AlertSettingsModal'
 import NotamNotificationContent from '../components/NotamNotificationContent'
@@ -45,8 +47,22 @@ export default function Dashboard() {
   const [alertSettings, setAlertSettings] = useState<AlertSettings>({ selectedFirs: [], selectedAirports: [], selectedKeywords: [] })
   const [soundUnlocked, setSoundUnlockedState] = useState(getSoundUnlocked())
   const [alertModalOpen, setAlertModalOpen] = useState(false)
+  const [detailNotam, setDetailNotam] = useState<NotamItem | null>(null)
+  const [loadingDetail, setLoadingDetail] = useState(false)
   const shownAlertIds = useRef<Set<string>>(new Set())
   const MAX_SHOWN_IDS = 200
+
+  const handleOpenCancelledNotam = useCallback(async (series: string) => {
+    setLoadingDetail(true)
+    try {
+      const notam = await fetchNotamBySeriesNumber(series)
+      if (notam) setDetailNotam(notam)
+    } catch {
+      // ignore
+    } finally {
+      setLoadingDetail(false)
+    }
+  }, [])
 
   const loadNotams = useCallback(async () => {
     try {
@@ -198,7 +214,13 @@ export default function Dashboard() {
           {loading && notams.length === 0 ? (
             <p className="loading">در حال بارگذاری...</p>
           ) : (
-            <NotamList notams={notams} loading={loading} />
+            <NotamList
+              notams={notams}
+              loading={loading}
+              onOpenCancelledNotam={handleOpenCancelledNotam}
+              onOpenReplacedNotam={handleOpenCancelledNotam}
+              loadingCancelled={loadingDetail}
+            />
           )}
           <PaginationBar
             totalCount={totalCount}
@@ -216,6 +238,14 @@ export default function Dashboard() {
         onClose={() => setAlertModalOpen(false)}
         onSave={(s) => setAlertSettings(s)}
       />
+      {detailNotam && (
+        <NotamAlertPopup
+          notam={detailNotam}
+          onClose={() => setDetailNotam(null)}
+          onOpenCancelledNotam={handleOpenCancelledNotam}
+          onOpenReplacedNotam={handleOpenCancelledNotam}
+        />
+      )}
     </div>
   )
 }

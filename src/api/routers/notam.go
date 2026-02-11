@@ -14,5 +14,6 @@ func Notam(g *gin.RouterGroup) {
 	g.GET("/alert-settings", middleware.NotamAuth, h.GetAlertSettings)
 	g.PUT("/alert-settings", middleware.NotamAuth, h.SaveAlertSettings)
 	g.GET("/recent", middleware.NotamAuth, h.Recent)
+	g.GET("/by-series", h.GetBySeries)
 	g.GET("/:id", h.GetByID)
 }

@@ -143,21 +143,41 @@ func (r *NotamRepository) eventToNotam(ev messaging.NotamEvent, notamMsg messagi
 	eventType := "N"
 	if contains(ev.EventType, "R") {
 		eventType = "R"
+		// برای جایگزین (Replace)، آدرس NOTAM جایگزین‌شده را از متن یا XML (xovernotamID) استخراج و در plainText قرار می‌دهیم
+		replacedRef := findRefNumber(ev, seriesNum)
+		if replacedRef == "" {
+			replacedRef = findXoverNotamFromXML(rawBody)
+		}
+		if replacedRef != "" {
+			plainText = "REPLACES NOTAM: " + replacedRef + "\n\n" + ev.Text
+		}
 	} else if contains(ev.EventType, "C") {
 		eventType = "C"
-		plainText = "NOTAM CANCELLED"
+		// برای کنسل، در plainText هم مشخص کنیم کدام NOTAM لغو شده (برای نمایش در لیست/فرانت)
+		cancelledRef := findRefNumber(ev, seriesNum)
+		if cancelledRef == "" {
+			cancelledRef = findXoverNotamFromXML(rawBody)
+		}
+		if cancelledRef != "" {
+			plainText = "NOTAM CANCELLED - CANCELLED NOTAM: " + cancelledRef
+		} else {
+			plainText = "NOTAM CANCELLED"
+		}
 	}
 
-	// Q-line استاندارد ICAO
+	// Q-line استاندارد ICAO (برای رویداد کنسل طبق استاندارد نمایش داده نمی‌شود)
 	qLine := ""
-	if ev.AffectedFIR != "" {
+	if eventType != "C" && ev.AffectedFIR != "" {
 		qLine = "Q) " + ev.AffectedFIR + "/QWMLW/IV/BO/W/000/999/"
 	}
 
 	// متن فرمت‌شده ICAO (برای خروجی Jeppesen)
 	formatted := ev.HumanReadableText
 	if formatted == "" {
-		formatted = buildICAOFormattedText(ev, seriesNum, eventType)
+		formatted = buildICAOFormattedText(ev, seriesNum, eventType, rawBody)
+	}
+	if eventType == "C" {
+		formatted = normalizeFormattedTextForCancel(formatted, seriesNum, ev, rawBody)
 	}
 
 	return model.Notam{
@@ -391,20 +411,27 @@ func contains(s, sub string) bool {
 }
 
 // buildICAOFormattedText ساخت متن فرمت‌شده ICAO برای خروجی استاندارد خلبان
-func buildICAOFormattedText(ev messaging.NotamEvent, seriesNum, eventType string) string {
+func buildICAOFormattedText(ev messaging.NotamEvent, seriesNum, eventType, rawBody string) string {
 	var sb strings.Builder
+	var cancelledRef string
 	if seriesNum != "" {
 		if eventType == "R" {
-			refNum := findRefNumber(ev)
+			refNum := findRefNumber(ev, seriesNum)
+			if refNum == "" {
+				refNum = findXoverNotamFromXML(rawBody)
+			}
 			if refNum != "" {
 				sb.WriteString(fmt.Sprintf("%s NOTAMR %s\n", seriesNum, refNum))
 			} else {
 				sb.WriteString(fmt.Sprintf("%s NOTAMR\n", seriesNum))
 			}
 		} else if eventType == "C" {
-			refNum := findRefNumber(ev)
-			if refNum != "" {
-				sb.WriteString(fmt.Sprintf("%s NOTAMC %s\n", seriesNum, refNum))
+			cancelledRef = findRefNumber(ev, seriesNum)
+			if cancelledRef == "" {
+				cancelledRef = findXoverNotamFromXML(rawBody)
+			}
+			if cancelledRef != "" {
+				sb.WriteString(fmt.Sprintf("%s NOTAMC %s\n", seriesNum, cancelledRef))
 			} else {
 				sb.WriteString(fmt.Sprintf("%s NOTAMC\n", seriesNum))
 			}
@@ -412,7 +439,8 @@ func buildICAOFormattedText(ev messaging.NotamEvent, seriesNum, eventType string
 			sb.WriteString(fmt.Sprintf("%s NOTAMN\n", seriesNum))
 		}
 	}
-	if ev.AffectedFIR != "" {
+	// بند Q برای رویداد کنسل طبق استاندارد نمایش داده نمی‌شود
+	if eventType != "C" && ev.AffectedFIR != "" {
 		sb.WriteString("Q) " + ev.AffectedFIR + "/QWMLW/IV/BO/W/000/999/\n")
 	}
 	loc := ev.ICAOLocation
@@ -443,7 +471,11 @@ func buildICAOFormattedText(ev messaging.NotamEvent, seriesNum, eventType string
 	}
 	txt := strings.TrimSpace(ev.Text)
 	if eventType == "C" {
-		txt = "NOTAM CANCELLED"
+		if cancelledRef != "" {
+			txt = "NOTAM CANCELLED - CANCELLED NOTAM: " + cancelledRef
+		} else {
+			txt = "NOTAM CANCELLED"
+		}
 	}
 	sb.WriteString("E) " + txt + "\n")
 	if ev.LowerLimit != "" {
@@ -455,12 +487,78 @@ func buildICAOFormattedText(ev messaging.NotamEvent, seriesNum, eventType string
 	return sb.String()
 }
 
-func findRefNumber(ev messaging.NotamEvent) string {
+// findRefNumber شماره NOTAM مرجع را از متن (برای جایگزین/لغو) استخراج می‌کند
+func findRefNumber(ev messaging.NotamEvent, currentSeries string) string {
+	// الگوی سریال NOTAM: حرف/اعداد + / + دو رقم سال مثل H2460/26, A1234/26
+	refSeriesRe := regexp.MustCompile(`\b([A-Z0-9]{1,6}/\d{2})\b`)
+	matches := refSeriesRe.FindAllStringSubmatch(ev.Text, -1)
+	for _, m := range matches {
+		if len(m) >= 2 {
+			cand := strings.TrimSpace(m[1])
+			if cand != "" && cand != currentSeries {
+				return cand
+			}
+		}
+	}
+	// روش قبلی: فیلد با پیشوند سری فعلی
 	fields := strings.Fields(ev.Text)
 	for _, f := range fields {
-		if len(f) == 9 && strings.Contains(f, "/") && strings.HasPrefix(f, ev.Series) {
-			return f
+		if strings.Contains(f, "/") && (ev.Series == "" || strings.HasPrefix(f, ev.Series)) {
+			if refSeriesRe.MatchString(f) {
+				sub := refSeriesRe.FindString(f)
+				if sub != "" && sub != currentSeries {
+					return sub
+				}
+			}
 		}
 	}
 	return ""
+}
+
+// findXoverNotamFromXML از XML خام شناسه NOTAM مرجع را استخراج می‌کند (xovernotamID با __text مثل A1617/26 برای Replace/Cancel)
+func findXoverNotamFromXML(rawBody string) string {
+	if rawBody == "" {
+		return ""
+	}
+	if m := xmlXoverNotamRe.FindStringSubmatch(rawBody); len(m) >= 2 {
+		s := strings.TrimSpace(m[1])
+		if s != "" && strings.Contains(s, "/") {
+			return s
+		}
+	}
+	// جستجوی هر الگوی سریال NOTAM در XML
+	refSeriesRe := regexp.MustCompile(`\b([A-Z0-9]{1,6}/\d{2})\b`)
+	if m := refSeriesRe.FindStringSubmatch(rawBody); len(m) >= 2 {
+		return strings.TrimSpace(m[1])
+	}
+	return ""
+}
+
+// normalizeFormattedTextForCancel برای NOTAM کنسل: خط اول را به صورت «سریال NOTAMC ref» درمی‌آورد و بند Q را حذف می‌کند
+func normalizeFormattedTextForCancel(formatted, seriesNum string, ev messaging.NotamEvent, rawBody string) string {
+	cancelledRef := findRefNumber(ev, seriesNum)
+	if cancelledRef == "" {
+		cancelledRef = findXoverNotamFromXML(rawBody)
+	}
+	firstLine := seriesNum + " NOTAMC"
+	if cancelledRef != "" {
+		firstLine = seriesNum + " NOTAMC " + cancelledRef
+	}
+	lines := strings.Split(formatted, "\n")
+	var out []string
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			out = append(out, line)
+			continue
+		}
+		if strings.HasPrefix(trimmed, "Q)") {
+			continue
+		}
+		if i == 0 && strings.Contains(strings.ToUpper(trimmed), "NOTAMC") {
+			line = firstLine
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
 }

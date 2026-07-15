@@ -32,7 +32,7 @@ services:
       - redis
 
   postgres:
-    image: postgres:16-alpine
+    image: postgis/postgis:16-3.4  # شامل افزونهٔ PostGIS (E0-6)
     container_name: notam_postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}

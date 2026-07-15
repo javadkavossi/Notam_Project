@@ -75,7 +75,7 @@ sequenceDiagram
 **قواعد آهنین:**
 - Solace از `WithMessageAutoAcknowledgement()` به **client acknowledgment** تغییر می‌کند؛ ack فقط پس از `XADD` موفق.
 - `XACK` فقط پس از commit موفق تراکنش DB.
-- پیام‌های pending (خوانده‌شده ولی ack‌نشده) با `XAUTOCLAIM` پس از timeout دوباره برداشته می‌شوند (تحمل crashِ consumer).
+- پیام‌های pending (خوانده‌شده ولی ack‌نشده) با `XPendingExt` + `XClaim` پس از timeout دوباره برداشته می‌شوند (تحمل crashِ consumer؛ `XAUTOCLAIM` در go-redis v7 موجود نیست).
 
 ---
 

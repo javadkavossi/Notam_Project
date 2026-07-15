@@ -16,6 +16,13 @@ func Up_1() {
 }
 
 func createTables(database *gorm.DB) {
+	// افزونهٔ PostGIS برای دادهٔ مکانی FIR/روت (E0-6). اگر نصب نباشد فقط هشدار می‌دهیم.
+	if err := database.Exec("CREATE EXTENSION IF NOT EXISTS postgis").Error; err != nil {
+		logger.Error(logging.Postgres, logging.Migration, "PostGIS extension not available: "+err.Error(), nil)
+	} else {
+		logger.Info(logging.Postgres, logging.Migration, "PostGIS extension ready", nil)
+	}
+
 	// حذف FKهای قبلی - NOTAMها از فرودگاه‌های مختلف FAA می‌آیند، نیازی به FK نیست
 	_ = database.Exec("ALTER TABLE notams DROP CONSTRAINT IF EXISTS fk_notams_airport").Error
 	_ = database.Exec("ALTER TABLE notams DROP CONSTRAINT IF EXISTS fk_notams_runway").Error

@@ -32,21 +32,31 @@ func (r *NotamRepository) Save(msg messaging.Message) {
 
 	ev := notamMsg.Event()
 
-	// جلوگیری از ذخیره تکراری
+	n := r.eventToNotam(ev, notamMsg)
+	n.MessageID = notamMsg.ID()
+	n.Source = notamMsg.Source()
+
+	// کلید متعارف برای idempotency و اجماع چندمنبعی (E2-3).
+	// اگر series معتبر نباشد، به message_id به‌عنوان کلید یکتا fallback می‌کنیم.
+	n.CanonicalKey = messaging.CanonicalKey(n.LocationICAO, n.SeriesNumber)
+	if n.CanonicalKey == "" {
+		n.CanonicalKey = "MSG:" + n.MessageID
+	}
+
+	// dedup/UPSERT بر اساس کلید متعارف (نه message_id که بین منابع فرق دارد).
 	var existing model.Notam
-	if err := r.db.Where("message_id = ?", notamMsg.ID()).First(&existing).Error; err == nil {
-		// به‌روزرسانی در صورت وجود (برای NOTAMR/NOTAMC)
-		updated := r.eventToNotam(ev, notamMsg)
-		updated.Id = existing.Id
-		updated.MessageID = existing.MessageID
-		if err := r.db.Model(&existing).Updates(updated).Error; err != nil {
+	if err := r.db.Where("canonical_key = ?", n.CanonicalKey).First(&existing).Error; err == nil {
+		// به‌روزرسانی نسخهٔ موجود (برای NOTAMR/NOTAMC یا دریافت مجدد/چندمنبعی)
+		n.Id = existing.Id
+		n.CreatedAt = existing.CreatedAt
+		if err := r.db.Model(&existing).Updates(&n).Error; err != nil {
 			log.Printf("❌ Update NOTAM failed: %v", err)
 		}
 		return
+	} else if err != gorm.ErrRecordNotFound {
+		log.Printf("❌ Lookup NOTAM failed: %v", err)
+		return
 	}
-
-	n := r.eventToNotam(ev, notamMsg)
-	n.MessageID = notamMsg.ID()
 
 	if err := r.db.Create(&n).Error; err != nil {
 		log.Printf("❌ Save NOTAM failed: %v", err)
@@ -54,8 +64,8 @@ func (r *NotamRepository) Save(msg messaging.Message) {
 	}
 
 	r.evaluateAlertDeliveries(&n)
-	log.Printf("💾 Saved NOTAM ID: %s | Location: %s | Series: %s",
-		n.MessageID, n.LocationICAO, n.SeriesNumber)
+	log.Printf("💾 Saved NOTAM | Key: %s | Source: %s | Location: %s | Series: %s",
+		n.CanonicalKey, n.Source, n.LocationICAO, n.SeriesNumber)
 }
 
 // evaluateAlertDeliveries تنظیمات اعلان همهٔ کاربران را از DB می‌خواند و در صورت تطابق NOTAM، تحویل اعلان ثبت می‌کند

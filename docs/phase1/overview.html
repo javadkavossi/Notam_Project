@@ -375,7 +375,7 @@ sequenceDiagram
     <div class="sec-head"><span class="sec-num">۰۶</span><h2>اعتمادپذیری — هیچ NOTAMی گم نشود</h2></div>
     <p class="sec-sub">مهم‌ترین بخش سیستم. شش خط دفاعی در برابر ازدست‌رفتن داده.</p>
     <div class="grid g3">
-      <div class="card reveal"><h4>🛡️ تحویل تضمین‌شده</h4><p>ack دولایه + بازبرداشت پیام‌های pending با XAUTOCLAIM پس از crash.</p></div>
+      <div class="card reveal"><h4>🛡️ تحویل تضمین‌شده</h4><p>ack دولایه + بازبرداشت پیام‌های pending با XPendingExt+XClaim پس از crash.</p></div>
       <div class="card reveal"><h4>🔎 تشخیص Gap</h4><p>NOTAMها در هر سری شماره‌گذاری ترتیبی دارند؛ شمارهٔ جاافتاده → backfill هدف‌دار.</p></div>
       <div class="card reveal"><h4>🔄 Reconciliation</h4><p>pull دوره‌ای کامل از FAA REST و diff با DB: backfill جاافتاده‌ها، علامت stale.</p></div>
       <div class="card reveal"><h4>🤝 اجماع چندمنبعی</h4><p>هر منبع یک sighting؛ confidence: single / corroborated / conflicting.</p></div>

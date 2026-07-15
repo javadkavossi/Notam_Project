@@ -7,8 +7,14 @@ import "time"
 type Notam struct {
 	BaseModel
 
-	// شناسه یکتا از منبع (Solace Message ID)
-	MessageID string `gorm:"size:120;uniqueIndex;not null"`
+	// شناسه یکتا از منبع (Solace Message ID) — برای provenance و ردیابی
+	MessageID string `gorm:"size:120;index;not null"`
+
+	// CanonicalKey هویت متعارف NOTAM بین منابع مختلف (location|series). کلید یکتای واقعی (E2-3).
+	CanonicalKey string `gorm:"size:140;uniqueIndex"`
+
+	// Source منبع دریافت این NOTAM (FAA_SWIM/AFTN/…) — گام اول provenance (E1-4)
+	Source string `gorm:"size:20;index"`
 
 	// ICAO Standard Fields (برای خروجی استاندارد خلبان)
 	SeriesNumber string `gorm:"size:20;index"`   // 0046/26, A3910/25

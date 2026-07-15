@@ -1,10 +1,8 @@
 package messaging
 
 import (
-	"encoding/xml"
 	"fmt"
 	"log"
-	"regexp"
 	"strings"
 	"time"
 
@@ -128,100 +126,14 @@ func (c *SolaceQueueConsumer) Start(handler func(Message)) error {
 			msgID = inboundMsg.GetDestinationName()
 		}
 
-		var event NotamEvent
-		if err := xml.Unmarshal([]byte(payload), &event); err != nil {
+		event, err := ParseNotamXML(payload)
+		if err != nil {
 			log.Printf("❌ XML parse error for ID %s: %v", msgID, err)
 			return
 		}
 
-		humanText := strings.TrimSpace(event.HumanReadableText)
-
-		if humanText == "" || len(strings.Split(humanText, "\n")) < 3 {
-			var sb strings.Builder
-
-			yr := "26"
-			if len(event.Year) >= 2 {
-				yr = event.Year[len(event.Year)-2:]
-			}
-			currentNumber := fmt.Sprintf("%s%04d/%s", event.Series, event.Number, yr)
-
-			refNumber := ""
-			refType := ""
-			if strings.Contains(strings.ToUpper(event.EventType), "R") {
-				refType = "NOTAMR"
-			} else if strings.Contains(strings.ToUpper(event.EventType), "C") {
-				refType = "NOTAMC"
-			}
-
-			if refType != "" {
-				refRe := regexp.MustCompile(`\b([A-Z0-9]{1,6}/\d{2})\b`)
-				for _, m := range refRe.FindAllStringSubmatch(event.Text, -1) {
-					if len(m) >= 2 {
-						cand := strings.TrimSpace(m[1])
-						if cand != "" && cand != currentNumber {
-							refNumber = cand
-							break
-						}
-					}
-				}
-			}
-
-			if refType != "" && refNumber != "" {
-				sb.WriteString(fmt.Sprintf("%s %s %s\n", currentNumber, refType, refNumber))
-			} else {
-				sb.WriteString(fmt.Sprintf("%s NOTAM%s\n", currentNumber, event.EventType))
-			}
-
-			// بند Q برای NOTAMC طبق استاندارد نمایش داده نمی‌شود
-			if refType != "NOTAMC" && event.AffectedFIR != "" {
-				sb.WriteString("Q) " + event.AffectedFIR + "/QWMLW/IV/BO/W/000/999/\n")
-			}
-
-			aLine := event.ICAOLocation
-			if aLine == "" {
-				aLine = event.Location
-			}
-			if aLine == "" {
-				aLine = event.AffectedFIR
-			}
-			sb.WriteString("A) " + aLine + "\n")
-
-			bcLine := ""
-			if event.EffectiveStart != "" {
-				bcLine += "B) " + event.EffectiveStart[2:]
-			}
-			if event.EffectiveEnd != "" {
-				if bcLine != "" {
-					bcLine += "   "
-				}
-				bcLine += "C) " + event.EffectiveEnd[2:]
-			}
-			if bcLine != "" {
-				sb.WriteString(bcLine + "\n")
-			}
-
-			if event.Schedule != "" {
-				sb.WriteString("D) " + event.Schedule + "\n")
-			}
-
-			eText := strings.TrimSpace(event.Text)
-			if refType == "NOTAMC" {
-				eText = "NOTAM CANCELLED"
-			} else if refType == "NOTAMR" {
-				eText = eText // متن اصلی جایگزین
-			}
-			sb.WriteString("E) " + eText + "\n")
-
-			if event.LowerLimit != "" {
-				sb.WriteString("F) " + event.LowerLimit + "\n")
-			}
-
-			if event.UpperLimit != "" {
-				sb.WriteString("G) " + event.UpperLimit + "\n")
-			}
-
-			humanText = sb.String()
-		}
+		// ساخت/تکمیل متن استاندارد ICAO (منطق تست‌پذیر در notam_parser.go)
+		humanText := EnsureHumanReadableText(event)
 		event.HumanReadableText = humanText
 
 		if humanText == "" {

@@ -1,0 +1,681 @@
+<title>NOTAM Briefing System — نقشهٔ فاز ۱</title>
+<style>
+  :root {
+    --ground: #f4f6fb;
+    --panel: #ffffff;
+    --panel-2: #eef2f8;
+    --ink: #16202f;
+    --ink-soft: #47566b;
+    --ink-faint: #7a8798;
+    --border: #dbe2ee;
+    --border-strong: #c3cddd;
+    --accent: #0e8ea0;
+    --accent-soft: #d3eef2;
+    --amber: #b9791b;
+    --chart-surface: #f3f5fa;
+
+    --sev-crit: #e5484d;
+    --sev-high: #ec6a1e;
+    --sev-med: #d69a12;
+    --sev-low: #2f9e57;
+    --sev-info: #7c8aa3;
+
+    --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", "Menlo", "Cascadia Mono", "Roboto Mono", monospace;
+    --maxw: 1180px;
+    --radius: 12px;
+    --shadow: 0 1px 2px rgba(16,32,47,.05), 0 8px 24px -12px rgba(16,32,47,.14);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0b1220;
+      --panel: #131d2e;
+      --panel-2: #0f1826;
+      --ink: #e7edf6;
+      --ink-soft: #a9b6c9;
+      --ink-faint: #6f7f96;
+      --border: #23324d;
+      --border-strong: #33456320;
+      --accent: #45c6d6;
+      --accent-soft: #123039;
+      --amber: #eab155;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px -14px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="light"] {
+    --ground: #f4f6fb; --panel: #ffffff; --panel-2: #eef2f8;
+    --ink: #16202f; --ink-soft: #47566b; --ink-faint: #7a8798;
+    --border: #dbe2ee; --border-strong: #c3cddd;
+    --accent: #0e8ea0; --accent-soft: #d3eef2; --amber: #b9791b;
+    --shadow: 0 1px 2px rgba(16,32,47,.05), 0 8px 24px -12px rgba(16,32,47,.14);
+  }
+  :root[data-theme="dark"] {
+    --ground: #0b1220; --panel: #131d2e; --panel-2: #0f1826;
+    --ink: #e7edf6; --ink-soft: #a9b6c9; --ink-faint: #6f7f96;
+    --border: #23324d; --border-strong: #2d3f5e;
+    --accent: #45c6d6; --accent-soft: #123039; --amber: #eab155;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px -14px rgba(0,0,0,.6);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--font-sans); line-height: 1.65; direction: rtl;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+    font-feature-settings: "tnum" 0;
+  }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 22px; }
+  code, .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; }
+
+  /* ---------- Status strip ---------- */
+  .statusbar {
+    position: sticky; top: 0; z-index: 40;
+    background: color-mix(in srgb, var(--panel) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+  }
+  .statusbar .wrap { display: flex; align-items: center; gap: 16px; height: 54px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -.01em; }
+  .brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--sev-low); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sev-low) 25%, transparent); }
+  .brand small { color: var(--ink-faint); font-weight: 500; font-size: .74rem; }
+  .status-chips { margin-inline-start: auto; display: flex; gap: 8px; align-items: center; }
+  .schip { font-family: var(--font-mono); font-size: .7rem; color: var(--ink-soft); border: 1px solid var(--border); border-radius: 20px; padding: 3px 9px; display: inline-flex; gap: 6px; align-items: center; }
+  .schip b { color: var(--ink); font-weight: 600; }
+  .schip .live { width: 7px; height: 7px; border-radius: 50%; background: var(--sev-low); animation: pulse 2.4s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.35;} }
+  @media (prefers-reduced-motion: reduce) { .schip .live { animation: none; } }
+  .themebtn { cursor: pointer; background: var(--panel-2); border: 1px solid var(--border); color: var(--ink-soft); border-radius: 8px; height: 32px; width: 34px; font-size: 15px; display: grid; place-items: center; }
+  .themebtn:hover { color: var(--ink); border-color: var(--border-strong); }
+  .themebtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ---------- Section nav ---------- */
+  nav.toc { position: sticky; top: 54px; z-index: 30; background: var(--ground); border-bottom: 1px solid var(--border); }
+  nav.toc .wrap { display: flex; gap: 4px; overflow-x: auto; padding: 8px 22px; scrollbar-width: thin; }
+  nav.toc a { white-space: nowrap; font-size: .82rem; color: var(--ink-soft); text-decoration: none; padding: 6px 12px; border-radius: 8px; font-weight: 500; }
+  nav.toc a:hover { background: var(--panel-2); color: var(--ink); }
+  nav.toc a.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+
+  /* ---------- Hero ---------- */
+  .hero { padding: 62px 0 40px; border-bottom: 1px solid var(--border); position: relative; overflow: hidden; }
+  .hero::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(520px 300px at 88% -10%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%);
+  }
+  .eyebrow { font-family: var(--font-mono); font-size: .74rem; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); margin: 0 0 14px; }
+  h1.title { font-size: clamp(2rem, 5vw, 3.4rem); line-height: 1.05; letter-spacing: -.03em; margin: 0 0 16px; font-weight: 800; text-wrap: balance; }
+  .lede { font-size: clamp(1.02rem, 2vw, 1.24rem); color: var(--ink-soft); max-width: 62ch; margin: 0 0 26px; }
+  .hero-flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-family: var(--font-mono); font-size: .8rem; }
+  .hero-flow .pill { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 7px 11px; box-shadow: var(--shadow); }
+  .hero-flow .arr { color: var(--accent); font-weight: 700; }
+
+  /* ---------- Sections ---------- */
+  section { padding: 52px 0; border-bottom: 1px solid var(--border); scroll-margin-top: 108px; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; margin: 0 0 8px; }
+  .sec-num { font-family: var(--font-mono); font-size: .8rem; color: var(--accent); border: 1px solid var(--border); border-radius: 7px; padding: 2px 8px; }
+  h2 { font-size: clamp(1.5rem, 3vw, 2.05rem); letter-spacing: -.02em; margin: 0; font-weight: 750; text-wrap: balance; }
+  .sec-sub { color: var(--ink-soft); max-width: 68ch; margin: 6px 0 30px; }
+  h3 { font-size: 1.14rem; letter-spacing: -.01em; margin: 34px 0 12px; }
+
+  .grid { display: grid; gap: 16px; }
+  .g2 { grid-template-columns: repeat(2, 1fr); }
+  .g3 { grid-template-columns: repeat(3, 1fr); }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 860px) { .g2,.g3,.g4 { grid-template-columns: 1fr; } }
+
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
+  .card h4 { margin: 0 0 7px; font-size: 1rem; display: flex; align-items: center; gap: 9px; }
+  .card p { margin: 0; color: var(--ink-soft); font-size: .92rem; }
+  .card .idx { font-family: var(--font-mono); font-size: .72rem; color: var(--accent); }
+
+  .principle { position: relative; }
+  .principle::before { content: ""; position: absolute; inset-inline-start: 0; top: 16px; bottom: 16px; width: 3px; border-radius: 3px; background: var(--accent); }
+  .principle { padding-inline-start: 22px; }
+
+  /* chart panel (constant light surface for diagrams — رنگ متن ثابتِ تیره تا روی سطح روشن همیشه خوانا باشد) */
+  .chart { background: var(--chart-surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; overflow-x: auto; box-shadow: var(--shadow); color: #16202f; }
+  .chart .cap { font-family: var(--font-mono); font-size: .72rem; color: #5b6b7d; margin-bottom: 6px; letter-spacing: .04em; direction: rtl; }
+  .mermaid { display: flex; justify-content: center; min-width: 560px; color: #16202f; }
+  /* fallback خوانا وقتی هنوز رندر نشده (متن خام دیاگرام) */
+  .mermaid:not([data-processed="true"]) { font-family: var(--font-mono); font-size: .8rem; white-space: pre; line-height: 1.5; color: #2b3a52; opacity: .85; }
+
+  /* tables */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; background: var(--panel); min-width: 560px; }
+  th, td { text-align: right; padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  thead th { background: var(--panel-2); font-weight: 650; color: var(--ink); position: sticky; top: 0; font-size: .82rem; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+  td .mono, th .mono { font-size: .84rem; }
+
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: .72rem; font-weight: 650; padding: 2px 9px; border-radius: 20px; font-family: var(--font-mono); white-space: nowrap; }
+  .chip.p0 { background: color-mix(in srgb, var(--sev-crit) 15%, transparent); color: var(--sev-crit); }
+  .chip.p1 { background: color-mix(in srgb, var(--sev-high) 16%, transparent); color: var(--sev-high); }
+  .chip.p2 { background: color-mix(in srgb, var(--sev-info) 18%, transparent); color: var(--ink-soft); }
+
+  /* severity scale */
+  .sevscale { display: grid; gap: 10px; }
+  .sevrow { display: grid; grid-template-columns: 128px 88px 1fr; gap: 14px; align-items: center; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; box-shadow: var(--shadow); }
+  @media (max-width: 620px) { .sevrow { grid-template-columns: 1fr; gap: 6px; } }
+  .sevrow .badge { font-family: var(--font-mono); font-weight: 700; font-size: .82rem; padding: 5px 10px; border-radius: 7px; text-align: center; color: #fff; }
+  .sevrow .rng { font-family: var(--font-mono); color: var(--ink-faint); font-size: .82rem; }
+  .sevrow .desc { color: var(--ink-soft); font-size: .9rem; }
+  .b-crit { background: var(--sev-crit); } .b-high { background: var(--sev-high); }
+  .b-med { background: var(--sev-med); } .b-low { background: var(--sev-low); }
+  .b-info { background: var(--sev-info); }
+
+  /* Q-code decoder */
+  .decoder { display: grid; grid-template-columns: 1fr 1.1fr; gap: 20px; }
+  @media (max-width: 860px) { .decoder { grid-template-columns: 1fr; } }
+  .samples { display: flex; flex-direction: column; gap: 8px; }
+  .sample { text-align: right; cursor: pointer; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 11px 14px; color: var(--ink); font-family: var(--font-mono); font-size: .82rem; display: flex; gap: 10px; align-items: center; transition: border-color .15s, background .15s; }
+  .sample:hover { border-color: var(--accent); }
+  .sample.active { border-color: var(--accent); background: var(--accent-soft); }
+  .sample .qc { color: var(--accent); font-weight: 700; }
+  .sample .tx { color: var(--ink-soft); direction: rtl; font-family: var(--font-sans); font-size: .8rem; }
+  .decode { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow); }
+  .qsplit { display: flex; gap: 6px; justify-content: center; margin-bottom: 18px; }
+  .qbox { width: 46px; height: 56px; display: grid; place-items: center; font-family: var(--font-mono); font-weight: 700; font-size: 1.5rem; border-radius: 9px; border: 1px solid var(--border); position: relative; }
+  .qbox span { position: absolute; bottom: -18px; font-size: .58rem; font-weight: 600; letter-spacing: .05em; color: var(--ink-faint); font-family: var(--font-mono); white-space: nowrap; }
+  .qbox.q { background: var(--panel-2); color: var(--ink-faint); }
+  .qbox.subj { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); border-color: var(--accent); }
+  .qbox.cond { background: color-mix(in srgb, var(--amber) 18%, transparent); color: var(--amber); border-color: var(--amber); }
+  .drow { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px dashed var(--border); font-size: .9rem; }
+  .drow .k { color: var(--ink-faint); }
+  .drow .v { font-weight: 600; text-align: left; }
+  .scoremeter { margin-top: 16px; }
+  .meter-track { height: 12px; border-radius: 8px; background: linear-gradient(90deg, var(--sev-info) 0%, var(--sev-low) 20%, var(--sev-med) 45%, var(--sev-high) 70%, var(--sev-crit) 100%); position: relative; }
+  .meter-knob { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 18px; height: 18px; border-radius: 50%; background: var(--panel); border: 3px solid var(--ink); transition: inset-inline-start .4s cubic-bezier(.2,.8,.2,1); box-shadow: 0 1px 4px rgba(0,0,0,.3); }
+  .scoreline { display: flex; justify-content: space-between; margin-top: 10px; align-items: center; }
+  .scoreline .lvl { font-family: var(--font-mono); font-weight: 700; padding: 4px 12px; border-radius: 7px; color: #fff; }
+  .scoreline .num { font-family: var(--font-mono); font-size: 1.5rem; font-weight: 800; }
+
+  /* milestones */
+  .miles { display: grid; gap: 12px; }
+  .mile { display: grid; grid-template-columns: 74px 1fr; gap: 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; box-shadow: var(--shadow); }
+  .mile .m { font-family: var(--font-mono); font-weight: 800; color: var(--accent); font-size: 1.1rem; }
+  .mile .body b { display: block; margin-bottom: 3px; }
+  .mile .body span { color: var(--ink-soft); font-size: .9rem; }
+  .mile .epics { margin-top: 7px; display: flex; flex-wrap: wrap; gap: 5px; }
+  .etag { font-family: var(--font-mono); font-size: .68rem; color: var(--ink-soft); border: 1px solid var(--border); border-radius: 6px; padding: 1px 7px; }
+
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: .9rem; }
+  .kv dt { color: var(--ink-faint); font-family: var(--font-mono); font-size: .78rem; padding-top: 2px; }
+  .kv dd { margin: 0; color: var(--ink); }
+
+  .note { background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius: 10px; padding: 14px 18px; font-size: .9rem; color: var(--ink); }
+  .note b { color: var(--accent); }
+
+  footer { padding: 40px 0 60px; color: var(--ink-faint); font-size: .84rem; }
+
+  .reveal { opacity: 0; transform: translateY(12px); transition: opacity .6s ease, transform .6s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } }
+</style>
+
+<div class="statusbar">
+  <div class="wrap">
+    <div class="brand">
+      <span class="dot"></span>
+      NOTAM Briefing System
+      <small>فاز ۱ · نقشهٔ معماری و پیاده‌سازی</small>
+    </div>
+    <div class="status-chips">
+      <span class="schip"><span class="live"></span> <b>FAA SWIM</b> منبع زنده</span>
+      <span class="schip">مقیاس <b>متوسط</b></span>
+      <span class="schip">on-prem</span>
+      <button class="themebtn" id="themebtn" aria-label="تغییر تم روشن/تیره" title="تغییر تم">◐</button>
+    </div>
+  </div>
+</div>
+
+<nav class="toc" aria-label="فهرست بخش‌ها">
+  <div class="wrap">
+    <a href="#vision">چشم‌انداز</a>
+    <a href="#principles">اصول طراحی</a>
+    <a href="#decisions">تصمیمات</a>
+    <a href="#arch">معماری</a>
+    <a href="#flow">جریان داده</a>
+    <a href="#reliability">اعتمادپذیری</a>
+    <a href="#qcode">دیکد Q-code</a>
+    <a href="#scoring">امتیاز اهمیت</a>
+    <a href="#briefing">موتور بریفینگ</a>
+    <a href="#roadmap">نقشهٔ راه</a>
+    <a href="#glossary">واژه‌نامه</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Phase 1 · Flight-centric NOTAM Briefing</p>
+    <h1 class="title">خواندن زندهٔ NOTAM، و ساخت بریفینگ دقیق برای هر پرواز</h1>
+    <p class="lede">خلبان یک پرواز را تعریف می‌کند — مبدأ، مقصد، الترنت‌ها، روت و پنجرهٔ زمانی — و سیستم تمام NOTAMهای مرتبط را پیدا، تحلیل، امتیازدهی و برجسته می‌کند. با تأکید بر دقت، عدم‌ازدست‌رفتن داده، و اعتماد.</p>
+    <div class="hero-flow" dir="ltr">
+      <span class="pill">ADEP</span><span class="arr">+</span>
+      <span class="pill">ADES</span><span class="arr">+</span>
+      <span class="pill">ALTN×n</span><span class="arr">+</span>
+      <span class="pill">ROUTE</span><span class="arr">+</span>
+      <span class="pill">TIME</span>
+      <span class="arr">→</span>
+      <span class="pill" style="border-color:var(--accent);color:var(--accent)">BRIEFING</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section id="vision">
+    <div class="sec-head"><span class="sec-num">۰۱</span><h2>چشم‌انداز فاز ۱</h2></div>
+    <p class="sec-sub">هدف: تبدیل جریان خام NOTAM به بریفینگ پرواز‌محورِ قابل‌اعتماد. پنج مرحله از دریافت تا نمایش.</p>
+    <div class="grid g3">
+      <div class="card reveal"><div class="idx">۰۱</div><h4>پیدا کردن</h4><p>تطبیق مکانی (فرودگاه‌ها + FIRهای مسیر + تقاطع جغرافیایی روت) و زمانی (هم‌پوشانی اعتبار NOTAM با پنجرهٔ پرواز).</p></div>
+      <div class="card reveal"><div class="idx">۰۲</div><h4>تحلیل و دسته‌بندی</h4><p>این NOTAM به چه بخشی مربوط است — باند، تاکسی‌وی، ناوبری، فضای هوایی — و چه اطلاعاتی دارد.</p></div>
+      <div class="card reveal"><div class="idx">۰۳</div><h4>امتیاز اهمیت</h4><p>سطح و درصد اهمیت هر NOTAM تا خلبان سریع‌تر مورد بحرانی را ببیند.</p></div>
+      <div class="card reveal"><div class="idx">۰۴</div><h4>برجسته و مرتب</h4><p>موارد بحرانی بولد و بالای لیست؛ رابط سریع، جذاب و خوانا.</p></div>
+      <div class="card reveal"><div class="idx">۰۵</div><h4>هشدار زنده</h4><p>NOTAM جدید در پنجرهٔ پرواز → اطلاع فوری؛ اگر بحرانی بود، اخطار اجباری.</p></div>
+      <div class="card reveal" style="background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 30%,transparent)"><div class="idx">فاز بعد</div><h4>LLM و صوت</h4><p>گزارش زبان‌طبیعی و بریفینگ صوتی مختصر — روی خروجی ساختاریافتهٔ فاز ۱ سوار می‌شود.</p></div>
+    </div>
+  </section>
+
+  <section id="principles">
+    <div class="sec-head"><span class="sec-num">۰۲</span><h2>اصول طراحی</h2></div>
+    <p class="sec-sub">این سیستم safety-critical است. هر تصمیم معماری با این اصول سنجیده می‌شود.</p>
+    <div class="grid g2">
+      <div class="card principle reveal"><h4>۱ · هیچ NOTAMی خاموش گم نشود</h4><p>دریافت تضمین‌شده، ack پس از ذخیره، صف پایدار، تشخیص gap و backfill. اگر داده‌ای گم شد، سیستم باید بداند و اعلام کند.</p></div>
+      <div class="card principle reveal"><h4>۲ · اگر نمی‌داند، بگوید نمی‌داند</h4><p>قطع منبع، عقب‌افتادگی پردازش یا کهنگی داده باید در UI صریح باشد. بریفینگ هرگز «کاملِ سبز» نباشد وقتی منبعی down است.</p></div>
+      <div class="card principle reveal"><h4>۳ · دقت، سپس سرعت</h4><p>دیکد Q-code و دسته‌بندی قاعده‌محور پایهٔ دقت است؛ کش و ایندکس فضایی پایهٔ سرعت.</p></div>
+      <div class="card principle reveal"><h4>۴ · اجماع چندمنبعی</h4><p>هر NOTAM هویت متعارف دارد؛ هر منبع یک «مشاهده» ثبت می‌کند. تعدد منابع = اطمینان، تعارض = پرچم بازبینی.</p></div>
+      <div class="card principle reveal"><h4>۵ · تکاملی، نه انقلابی</h4><p>روی همین کد Go/React ساخته می‌شود؛ ماژولار می‌شود تا بعداً قابل تفکیک به سرویس باشد. بدون بازنویسی از صفر.</p></div>
+      <div class="card principle reveal"><h4>۶ · قابل‌مشاهده از روز اول</h4><p>متریک، health، audit trail و alert جزو الزامات پایه‌اند، نه افزودنیِ بعدی.</p></div>
+    </div>
+  </section>
+
+  <section id="decisions">
+    <div class="sec-head"><span class="sec-num">۰۳</span><h2>تصمیمات کلیدی</h2></div>
+    <p class="sec-sub">بر اساس جمع‌بندی با کارفرما.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>موضوع</th><th>تصمیم</th><th>دلیل</th></tr></thead>
+        <tbody>
+          <tr><td>سبک معماری</td><td><b>مونولیت ماژولار</b> (Go)</td><td>تکاملی روی کد موجود، ریسک کم، تیم کوچک، قابل تفکیک بعدی</td></tr>
+          <tr><td>منابع NOTAM</td><td>FAA SWIM زنده + <b>AFTN</b> کاندید + FAA REST</td><td>چندمنبعی برای اطمینان؛ فعلاً FAA زنده</td></tr>
+          <tr><td>صف داخلی</td><td><b>Redis Streams</b></td><td>on-prem، موجود، consumer-group + replay؛ مسیر ارتقا: NATS JetStream</td></tr>
+          <tr><td>داده مکانی</td><td>PostgreSQL + <b>PostGIS</b></td><td>تطبیق روت/FIR جغرافیایی دقیق و سریع</td></tr>
+          <tr><td>بلادرنگ فرانت</td><td><b>WebSocket</b></td><td>تأخیر کم، فشار کمتر (جایگزین polling فعلی)</td></tr>
+          <tr><td>احراز هویت</td><td><b>JWT</b> کوتاه‌عمر + نقش‌ها</td><td>توکن ثابت فعلی جعل‌پذیر است</td></tr>
+          <tr><td>استقرار</td><td><b>on-prem</b></td><td>بدون وابستگی به managed cloud</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="arch">
+    <div class="sec-head"><span class="sec-num">۰۴</span><h2>معماری — مونولیت ماژولار</h2></div>
+    <p class="sec-sub">مونولیت واحد با مرزهای ماژولی سخت‌گیرانه. هشت ماژول از دریافت تا نمایش؛ ingest هیچ‌وقت مستقیم به DB نمی‌نویسد — همه‌چیز از استریم عبور می‌کند.</p>
+    <div class="chart reveal">
+      <div class="cap">۸ ماژول داخلی و مرزها</div>
+      <pre class="mermaid">
+flowchart LR
+    SRC[("منابع: Solace / AFTN / REST")] --> ING["① ingest<br/>آداپتور + normalizer"]
+    ING --> STR[["Redis Streams<br/>صف پایدار"]]
+    STR --> PIPE["② pipeline<br/>parse → Q-code → dedupe → classify → score"]
+    REF["③ reference<br/>Airport/Runway/FIR · PostGIS"] --> PIPE
+    PIPE --> DB[("④ PostgreSQL + PostGIS")]
+    REF --> DB
+    PIPE --> ALT["⑥ alerting"]
+    DB --> BRF["⑤ briefing<br/>match geo+time · rank"]
+    REF --> BRF
+    BRF --> API["⑦ api · REST"]
+    ALT --> WS["⑦ WebSocket hub"]
+    API --> FE(["React SPA"])
+    WS --> FE
+    OBS["⑧ observability<br/>metrics · health · gap"] -.نظارت.- ING
+    OBS -.-> PIPE
+      </pre>
+    </div>
+    <div class="grid g4" style="margin-top:18px">
+      <div class="card reveal"><div class="idx">①②</div><h4>ingest · pipeline</h4><p>دریافت تضمین‌شده و پردازش idempotent با کلید متعارف.</p></div>
+      <div class="card reveal"><div class="idx">③④</div><h4>reference · storage</h4><p>دادهٔ مرجع نسخه‌دار + Postgres/PostGIS + کش Redis.</p></div>
+      <div class="card reveal"><div class="idx">⑤⑥</div><h4>briefing · alerting</h4><p>موتور تطبیق پرواز و اعلان بلادرنگ.</p></div>
+      <div class="card reveal"><div class="idx">⑦⑧</div><h4>api · observability</h4><p>REST + WebSocket و مانیتورینگ کامل.</p></div>
+    </div>
+  </section>
+
+  <section id="flow">
+    <div class="sec-head"><span class="sec-num">۰۵</span><h2>جریان داده و ack دولایه</h2></div>
+    <p class="sec-sub">ack به منبع فقط پس از نوشتن در استریم؛ XACK فقط پس از commit در DB. در بدترین حالت پردازش تکراری (at-least-once) که با idempotency بی‌ضرر است.</p>
+    <div class="chart reveal">
+      <div class="cap">دریافت تا اعلان بلادرنگ</div>
+      <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    participant SRC as منبع
+    participant ING as ingest
+    participant STR as Redis Stream
+    participant PIPE as pipeline
+    participant DB as Postgres
+    participant WS as WebSocket
+    SRC->>ING: پیام خام NOTAM
+    ING->>STR: XADD (raw + provenance)
+    ING-->>SRC: ACK ✅ (فقط پس از XADD موفق)
+    PIPE->>STR: XREADGROUP
+    PIPE->>PIPE: parse + Q-code + classify + score
+    PIPE->>DB: UPSERT (idempotent · canonical_key)
+    PIPE->>STR: XACK ✅ (پس از commit)
+    PIPE->>WS: NOTAM جدید → match پروازهای فعال
+    WS-->>SRC: (اخطار بحرانی به کاربران مرتبط)
+      </pre>
+    </div>
+    <div class="note reveal" style="margin-top:16px"><b>بدهی فنی که رفع می‌شود:</b> consumer فعلی <span class="mono">WithMessageAutoAcknowledgement()</span> دارد؛ اگر اپ بین دریافت و ذخیره crash کند NOTAM گم می‌شود. معماری جدید به client-ack پس از نوشتن در استریم تغییر می‌کند.</div>
+  </section>
+
+  <section id="reliability">
+    <div class="sec-head"><span class="sec-num">۰۶</span><h2>اعتمادپذیری — هیچ NOTAMی گم نشود</h2></div>
+    <p class="sec-sub">مهم‌ترین بخش سیستم. شش خط دفاعی در برابر ازدست‌رفتن داده.</p>
+    <div class="grid g3">
+      <div class="card reveal"><h4>🛡️ تحویل تضمین‌شده</h4><p>ack دولایه + بازبرداشت پیام‌های pending با XAUTOCLAIM پس از crash.</p></div>
+      <div class="card reveal"><h4>🔎 تشخیص Gap</h4><p>NOTAMها در هر سری شماره‌گذاری ترتیبی دارند؛ شمارهٔ جاافتاده → backfill هدف‌دار.</p></div>
+      <div class="card reveal"><h4>🔄 Reconciliation</h4><p>pull دوره‌ای کامل از FAA REST و diff با DB: backfill جاافتاده‌ها، علامت stale.</p></div>
+      <div class="card reveal"><h4>🤝 اجماع چندمنبعی</h4><p>هر منبع یک sighting؛ confidence: single / corroborated / conflicting.</p></div>
+      <div class="card reveal"><h4>📡 Liveness</h4><p>heartbeat هر منبع؛ سکوت غیرعادی → هشدار + نمایش فوری در UI.</p></div>
+      <div class="card reveal"><h4>📥 Dead-Letter</h4><p>پیام parse‌نشده هرگز دور ریخته نمی‌شود؛ به DLQ می‌رود + قابل replay.</p></div>
+    </div>
+    <h3>تشخیص و رفع Gap</h3>
+    <div class="chart reveal">
+      <div class="cap">از تشخیص شمارهٔ جاافتاده تا هشدار تأییدشده</div>
+      <pre class="mermaid">
+flowchart TD
+    N["NOTAM جدید A0046/26 @ OIII"] --> C{"شماره‌های میانی جا افتاده؟"}
+    C -->|خیر| OK["به‌روزرسانی high-water-mark"]
+    C -->|بله A0045| GAP["ثبت Gap · متریک notam_gaps"]
+    GAP --> BF["backfill هدف‌دار از FAA REST"]
+    BF --> RES{"یافت شد؟"}
+    RES -->|بله| FILL["ذخیره + بستن gap"]
+    RES -->|خیر پس از N تلاش| ALERT["🚨 هشدار عملیات: gap تأییدشده"]
+      </pre>
+    </div>
+    <div class="note reveal" style="margin-top:16px"><b>نمایش اعتماد در UI:</b> نوار وضعیت منابع (🟢/🟡/🔴)، برچسب اطمینان روی هر NOTAM (تک‌منبع / تأییدشده / ⚠ تعارض)، و زمان تازگی داده «بریفینگ بر اساس داده تا HH:MM UTC».</div>
+  </section>
+
+  <section id="qcode">
+    <div class="sec-head"><span class="sec-num">۰۷</span><h2>دیکد Q-code — پایهٔ دقت بدون LLM</h2></div>
+    <p class="sec-sub">هر NOTAM یک کد ۵حرفی ماشین‌خوان دارد: <span class="mono">Q</span> + دو حرف موضوع + دو حرف وضعیت. دیکد آن deterministic و قابل‌ممیزی است. یک نمونه را انتخاب کنید تا تحلیل شود.</p>
+    <div class="decoder">
+      <div class="samples" id="samples" role="listbox" aria-label="نمونه NOTAM"></div>
+      <div class="decode" id="decode" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section id="scoring">
+    <div class="sec-head"><span class="sec-num">۰۸</span><h2>امتیاز اهمیت — پنج سطح</h2></div>
+    <p class="sec-sub">امتیاز قاعده‌محور و قابل‌توضیح: وزن پایهٔ Q-code + ارتباط فاز پرواز + تطبیق دقیق باند/رویه + پرچم‌های بحرانی. امتیاز نهایی وابسته به کانتکست پرواز است.</p>
+    <div class="sevscale">
+      <div class="sevrow reveal"><span class="badge b-crit">CRITICAL</span><span class="rng">۸۰–۱۰۰</span><span class="desc">باند مقصد بسته، فرودگاه بسته، ILSِ باندِ فرود out — بولد، بالای لیست، اخطار اجباری.</span></div>
+      <div class="sevrow reveal"><span class="badge b-high">HIGH</span><span class="rng">۶۰–۷۹</span><span class="desc">FICON، بستن تاکسی‌وی اصلی، GPS out در approach — برجسته.</span></div>
+      <div class="sevrow reveal"><span class="badge b-med">MEDIUM</span><span class="rng">۳۵–۵۹</span><span class="desc">محدودیت جزئی، روشنایی ثانویه — عادی.</span></div>
+      <div class="sevrow reveal"><span class="badge b-low">LOW</span><span class="rng">۱۵–۳۴</span><span class="desc">تغییرات اداری، ناوید کم‌اهمیت — جمع‌شده.</span></div>
+      <div class="sevrow reveal"><span class="badge b-info">INFO</span><span class="rng">۰–۱۴</span><span class="desc">اطلاعی / trigger — جمع‌شده.</span></div>
+    </div>
+    <div class="note reveal" style="margin-top:18px">تصمیم سطح‌بندی <b>همیشه قاعده‌محور</b> می‌ماند. LLM در فاز بعد فقط توضیح و خلاصه می‌افزاید — نه تصمیم اهمیت. این برای اعتماد safety-critical حیاتی است.</div>
+  </section>
+
+  <section id="briefing">
+    <div class="sec-head"><span class="sec-num">۰۹</span><h2>موتور بریفینگ</h2></div>
+    <p class="sec-sub">ورودی: پرواز (۵ فرودگاه + روت + زمان). خروجی: NOTAMهای مرتبط، دسته‌بندی و رتبه‌بندی‌شده. هدف کارایی: بریفینگ گرم زیر ۳۰۰ms.</p>
+    <div class="chart reveal">
+      <div class="cap">از FlightPlan تا Briefing رتبه‌بندی‌شده</div>
+      <pre class="mermaid">
+flowchart TD
+    FP["FlightPlan"] --> AP["فرودگاه‌ها: ADEP+ADES+ALTN"]
+    FP --> RT["کریدور روت (PostGIS)"]
+    FP --> W["پنجرهٔ زمانی [ETD-buf , ETA+buf]"]
+    AP --> Q1["NOTAMهای aerodrome"]
+    RT --> Q2["NOTAMهای enroute · ST_Intersects"]
+    Q1 --> TF["فیلتر زمانی + schedule بند D"]
+    Q2 --> TF
+    W --> TF
+    TF --> ST["حذف کنسل/منقضی + اعمال R/C"]
+    ST --> SC["امتیاز کانتکستی + match_reason"]
+    SC --> GRP["گروه‌بندی: فرودگاه/فاز/دسته"]
+    GRP --> OUT["Briefing + خلاصهٔ بحرانی"]
+      </pre>
+    </div>
+  </section>
+
+  <section id="roadmap">
+    <div class="sec-head"><span class="sec-num">۱۰</span><h2>نقشهٔ راه — ۵ Milestone · ۱۰ Epic</h2></div>
+    <p class="sec-sub">اجرا از پایین (زیرساخت) به بالا (UX). ابتدا داده‌ها مطمئن وارد می‌شوند، سپس فهم، سپس بریفینگ.</p>
+    <div class="miles">
+      <div class="mile reveal"><span class="m">M1</span><div class="body"><b>پایهٔ مطمئن</b><span>NOTAMها با ack تضمین‌شده از استریم وارد و ذخیره می‌شوند؛ بدون data-loss.</span><div class="epics"><span class="etag">E0 پایه/امن‌سازی</span><span class="etag">E1 Ingest</span><span class="etag">E2 Pipeline</span></div></div></div>
+      <div class="mile reveal"><span class="m">M2</span><div class="body"><b>فهمِ دقیق</b><span>هر NOTAM دیکد/دسته‌بندی/امتیازدهی می‌شود؛ دادهٔ مرجع + PostGIS آماده.</span><div class="epics"><span class="etag">E3 تحلیل</span><span class="etag">E7 دادهٔ مرجع</span></div></div></div>
+      <div class="mile reveal"><span class="m">M3</span><div class="body"><b>بریفینگ پرواز</b><span>کاربر پرواز تعریف می‌کند و بریفینگ مرتب‌شده می‌گیرد.</span><div class="epics"><span class="etag">E5 بریفینگ</span><span class="etag">E8 فرانت (پایه)</span></div></div></div>
+      <div class="mile reveal"><span class="m">M4</span><div class="body"><b>اعتماد و زنده</b><span>اعلان بلادرنگ، gap/reconcile/consensus، مانیتورینگ کامل.</span><div class="epics"><span class="etag">E4 اعتمادپذیری</span><span class="etag">E6 بلادرنگ</span><span class="etag">E9 Observability</span></div></div></div>
+      <div class="mile reveal"><span class="m">M5</span><div class="body"><b>پرداخت UX</b><span>نقشه، نوار اعتماد، اخطار بحرانی، تجربهٔ سریع و جذاب.</span><div class="epics"><span class="etag">E8 فرانت (کامل)</span></div></div></div>
+    </div>
+
+    <h3>Epicها و وابستگی‌ها</h3>
+    <div class="chart reveal">
+      <div class="cap">ترتیب وابستگی Epicها</div>
+      <pre class="mermaid">
+flowchart TD
+    E0["E0 پایه/امن‌سازی"] --> E1["E1 Ingest"]
+    E0 --> E7["E7 دادهٔ مرجع/PostGIS"]
+    E1 --> E2["E2 Pipeline"]
+    E2 --> E3["E3 تحلیل"]
+    E7 --> E3
+    E1 --> E4["E4 اعتمادپذیری"]
+    E3 --> E5["E5 بریفینگ"]
+    E7 --> E5
+    E5 --> E6["E6 بلادرنگ"]
+    E5 --> E8["E8 Frontend"]
+    E6 --> E8
+    E4 --> E9["E9 Observability"]
+    E1 --> E9
+      </pre>
+    </div>
+
+    <h3>خلاصهٔ Epicها</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Epic</th><th>موضوع</th><th>اولویت</th><th>نمونه تسک کلیدی</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">E0</td><td>پایه و امن‌سازی</td><td><span class="chip p0">P0</span></td><td>حذف credential هاردکد، JWT، Redis Streams، PostGIS</td></tr>
+          <tr><td class="mono">E1</td><td>Ingest تضمین‌شده</td><td><span class="chip p0">P0</span></td><td>Solace با client-ack (حذف auto-ack)</td></tr>
+          <tr><td class="mono">E2</td><td>Pipeline پردازش</td><td><span class="chip p0">P0</span></td><td>جداسازی parser، canonical_key، idempotent UPSERT</td></tr>
+          <tr><td class="mono">E3</td><td>تحلیل Q-code/امتیاز</td><td><span class="chip p1">P1</span></td><td>جدول Q-code، امتیاز پایه، golden set</td></tr>
+          <tr><td class="mono">E4</td><td>اعتمادپذیری</td><td><span class="chip p1">P1</span></td><td>gap detection، reconcile job، consensus</td></tr>
+          <tr><td class="mono">E5</td><td>موتور بریفینگ</td><td><span class="chip p1">P1</span></td><td>تطبیق enroute با PostGIS، امتیاز کانتکستی</td></tr>
+          <tr><td class="mono">E6</td><td>بلادرنگ و اعلان</td><td><span class="chip p1">P1</span></td><td>WebSocket hub، subscription، اخطار بحرانی</td></tr>
+          <tr><td class="mono">E7</td><td>دادهٔ مرجع + PostGIS</td><td><span class="chip p0">P0</span></td><td>ETL فرودگاه/باند/FIR، نسخه‌بندی + تشخیص تغییر</td></tr>
+          <tr><td class="mono">E8</td><td>Frontend بریفینگ</td><td><span class="chip p1">P1</span></td><td>فرم پرواز، نمای بریفینگ، نوار اعتماد، نقشه</td></tr>
+          <tr><td class="mono">E9</td><td>Observability</td><td><span class="chip p1">P1</span></td><td>متریک Prometheus، health، source liveness</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="glossary">
+    <div class="sec-head"><span class="sec-num">۱۱</span><h2>واژه‌نامه</h2></div>
+    <div class="grid g2">
+      <div class="card reveal"><dl class="kv">
+        <dt>NOTAM</dt><dd>اطلاعیهٔ رسمی وضعیت تأسیسات/خدمات/فضای هوایی</dd>
+        <dt>ADEP/ADES</dt><dd>فرودگاه مبدأ / مقصد</dd>
+        <dt>ALTN</dt><dd>فرودگاه جایگزین (اضطراری)</dd>
+        <dt>FIR</dt><dd>منطقهٔ اطلاعات پروازی (بلوک فضای هوایی)</dd>
+        <dt>Q-code</dt><dd>کد ۵حرفی ماشین‌خوان موضوع+وضعیت</dd>
+        <dt>PIB</dt><dd>بولتن اطلاعات پیش‌پروازی (خروجی بریفینگ)</dd>
+      </dl></div>
+      <div class="card reveal"><dl class="kv">
+        <dt>FICON</dt><dd>گزارش وضعیت سطح باند — مهم برای فرود</dd>
+        <dt>NOTAMN/R/C</dt><dd>New / Replace / Cancel</dd>
+        <dt>SWIM</dt><dd>بستر توزیع دادهٔ FAA (منبع فعلی)</dd>
+        <dt>AFTN</dt><dd>شبکهٔ مخابراتی هوانوردی (منبع کاندید)</dd>
+        <dt>Gap detection</dt><dd>تشخیص شماره‌های جاافتاده برای کشف داده گم‌شده</dd>
+        <dt>Consensus</dt><dd>اجماع چند منبع روی یک NOTAM متعارف</dd>
+      </dl></div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  <p>سند بصری فاز ۱ · تولیدشده از مستندات <span class="mono">docs/phase1/</span> — README · ARCHITECTURE · RELIABILITY · ANALYSIS_AND_BRIEFING · TASKS. ممکن است با تغییر پروژه نیاز به به‌روزرسانی داشته باشد.</p>
+</footer>
+
+<script>
+  // ---- Theme toggle ----
+  (function () {
+    var root = document.documentElement;
+    var btn = document.getElementById('themebtn');
+    btn.addEventListener('click', function () {
+      var cur = root.getAttribute('data-theme');
+      if (!cur) {
+        cur = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      root.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+    });
+  })();
+
+  // ---- Scroll reveal ----
+  (function () {
+    var els = document.querySelectorAll('.reveal');
+    if (!('IntersectionObserver' in window)) { els.forEach(function(e){e.classList.add('in');}); return; }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } });
+    }, { threshold: .12 });
+    els.forEach(function (e) { io.observe(e); });
+  })();
+
+  // ---- Active section in nav ----
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+    var map = {};
+    links.forEach(function (l) { map[l.getAttribute('href').slice(1)] = l; });
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting) {
+          links.forEach(function (l) { l.classList.remove('active'); });
+          var a = map[en.target.id]; if (a) a.classList.add('active');
+        }
+      });
+    }, { rootMargin: '-45% 0px -50% 0px' });
+    document.querySelectorAll('section[id]').forEach(function (s) { io.observe(s); });
+  })();
+
+  // ---- Q-code decoder ----
+  (function () {
+    var subjects = {
+      MR: { label: 'باند (Runway)', cat: 'RUNWAY', base: 70 },
+      MX: { label: 'تاکسی‌وی (Taxiway)', cat: 'TAXIWAY', base: 40 },
+      IC: { label: 'ILS', cat: 'NAVIGATION', base: 55 },
+      OB: { label: 'مانع (Obstacle)', cat: 'WARNING', base: 45 },
+      RT: { label: 'ناحیهٔ محدود (Restricted)', cat: 'AIRSPACE', base: 55 },
+      FA: { label: 'فرودگاه (Aerodrome)', cat: 'AERODROME', base: 78 }
+    };
+    var conditions = {
+      LC: { label: 'بسته (Closed)', delta: 30 },
+      AS: { label: 'غیرقابل‌استفاده (U/S)', delta: 20 },
+      LT: { label: 'محدود (Limited)', delta: 5 },
+      CE: { label: 'برپاشده (Erected)', delta: 10 },
+      CA: { label: 'فعال (Activated)', delta: 15 },
+      CN: { label: 'کنسل (Cancelled)', delta: -45 }
+    };
+    var samples = [
+      { q: 'QMRLC', tx: 'RWY 29R CLSD — باند فرود مقصد', ctx: 15 },
+      { q: 'QICAS', tx: 'ILS RWY 29R U/S — لوکالایزر خراب', ctx: 12 },
+      { q: 'QFALC', tx: 'AD CLSD — فرودگاه بسته', ctx: 20 },
+      { q: 'QMXLC', tx: 'TWY B CLSD — تاکسی‌وی اصلی', ctx: 10 },
+      { q: 'QOBCE', tx: 'CRANE ERECTED — جرثقیل نزدیک approach', ctx: 8 },
+      { q: 'QRTCA', tx: 'RESTRICTED AREA ACT — ناحیهٔ محدود فعال', ctx: 6 },
+      { q: 'QMRCN', tx: 'RWY NOTAM CANCELLED — لغو NOTAM قبلی', ctx: 0 }
+    ];
+    function levelFor(score) {
+      if (score >= 80) return { name: 'CRITICAL', cls: 'b-crit', color: getComputedStyle(document.documentElement).getPropertyValue('--sev-crit') };
+      if (score >= 60) return { name: 'HIGH', cls: 'b-high', color: getComputedStyle(document.documentElement).getPropertyValue('--sev-high') };
+      if (score >= 35) return { name: 'MEDIUM', cls: 'b-med', color: getComputedStyle(document.documentElement).getPropertyValue('--sev-med') };
+      if (score >= 15) return { name: 'LOW', cls: 'b-low', color: getComputedStyle(document.documentElement).getPropertyValue('--sev-low') };
+      return { name: 'INFO', cls: 'b-info', color: getComputedStyle(document.documentElement).getPropertyValue('--sev-info') };
+    }
+    function decode(sample) {
+      var q = sample.q;
+      var subjCode = q.substr(1, 2), condCode = q.substr(3, 2);
+      var subj = subjects[subjCode] || { label: subjCode, cat: '—', base: 30 };
+      var cond = conditions[condCode] || { label: condCode, delta: 0 };
+      var score = Math.max(0, Math.min(100, subj.base + cond.delta + (sample.ctx || 0)));
+      var lvl = levelFor(score);
+      var box = document.getElementById('decode');
+      box.innerHTML =
+        '<div class="qsplit" dir="ltr">' +
+          '<div class="qbox q">' + q[0] + '<span>ثابت</span></div>' +
+          '<div class="qbox subj">' + subjCode[0] + '<span>موضوع</span></div>' +
+          '<div class="qbox subj">' + subjCode[1] + '</div>' +
+          '<div class="qbox cond">' + condCode[0] + '<span>وضعیت</span></div>' +
+          '<div class="qbox cond">' + condCode[1] + '</div>' +
+        '</div>' +
+        '<div class="drow"><span class="k">موضوع</span><span class="v">' + subj.label + '</span></div>' +
+        '<div class="drow"><span class="k">وضعیت</span><span class="v">' + cond.label + '</span></div>' +
+        '<div class="drow"><span class="k">دسته</span><span class="v mono">' + subj.cat + '</span></div>' +
+        '<div class="scoremeter"><div class="meter-track"><div class="meter-knob" id="knob"></div></div>' +
+        '<div class="scoreline"><span class="lvl ' + lvl.cls + '">' + lvl.name + '</span><span class="num">' + score + '<span style="font-size:.8rem;color:var(--ink-faint)">/100</span></span></div></div>';
+      var knob = document.getElementById('knob');
+      requestAnimationFrame(function () { knob.style.insetInlineStart = score + '%'; });
+    }
+    var list = document.getElementById('samples');
+    samples.forEach(function (s, i) {
+      var b = document.createElement('button');
+      b.className = 'sample' + (i === 0 ? ' active' : '');
+      b.setAttribute('role', 'option');
+      b.innerHTML = '<span class="qc">' + s.q + '</span><span class="tx">' + s.tx + '</span>';
+      b.addEventListener('click', function () {
+        list.querySelectorAll('.sample').forEach(function (x) { x.classList.remove('active'); });
+        b.classList.add('active');
+        decode(s);
+      });
+      list.appendChild(b);
+    });
+    decode(samples[0]);
+  })();
+
+  // ---- Mermaid ----
+  // در Artifact منتشرشده، محیط claude.ai دیاگرام‌های <pre class="mermaid"> را به‌صورت بومی رندر می‌کند.
+  // برای باز کردن فایل به‌صورت محلی (بدون آن محیط)، کتابخانه از CDN لود و اینجا رندر می‌شود.
+  (function () {
+    var MM_THEME = {
+      startOnLoad: false,
+      securityLevel: 'loose',
+      theme: 'base',
+      themeVariables: {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        fontSize: '13px',
+        background: '#f3f5fa',
+        primaryColor: '#e7edf6',
+        primaryBorderColor: '#9db0cc',
+        primaryTextColor: '#16202f',
+        lineColor: '#5b6b7d',
+        secondaryColor: '#d3eef2',
+        tertiaryColor: '#fbeede'
+      }
+    };
+    function renderMermaid() {
+      if (window.__mmDone || !window.mermaid) return;
+      window.__mmDone = true;
+      try {
+        window.mermaid.initialize(MM_THEME);
+        if (typeof window.mermaid.run === 'function') {
+          window.mermaid.run({ querySelector: '.mermaid' });      // mermaid v10+
+        } else if (typeof window.mermaid.init === 'function') {
+          window.mermaid.init(undefined, document.querySelectorAll('.mermaid')); // v9
+        }
+      } catch (e) { /* اگر رندر نشد، متنِ fallback خوانا باقی می‌ماند */ }
+    }
+    // اگر کتابخانه از قبل موجود است (محیط Artifact یا لود زودهنگام)
+    if (window.mermaid) { renderMermaid(); return; }
+    // در غیر این صورت از CDN لود کن (فقط برای نمایش محلی؛ در Artifact ممکن است CSP مسدود کند و رندر بومی انجام شود)
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
+    s.onload = renderMermaid;
+    document.head.appendChild(s);
+  })();
+</script>

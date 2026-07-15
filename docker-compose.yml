@@ -9,15 +9,18 @@ services:
     container_name: faa-notam-consumer
     restart: unless-stopped
     environment:
+      # مقادیر حساس از فایل .env خوانده می‌شوند (کامیت نمی‌شود). نمونه: .env.example
       - APP_ENV=docker
       - TZ=Asia/Tehran
-      - AUTH_USER=admin
-      - AUTH_PASS=admin
-      - SOLACE_HOST=tcps://ems2.swim.faa.gov:55443
-      - SOLACE_VPN=AIM_FNS
-      - SOLACE_USERNAME=hossein.kavosi2.gmail.com
-      - SOLACE_PASSWORD=GK5F9tZFRnqhucFniZhoOw
-      - SOLACE_QUEUE=hossein.kavosi2.gmail.com.AIM_FNS.1696ec1b-7b8d-41e3-8e96-90f62d821170.OUT
+      - AUTH_USER=${AUTH_USER:-admin}
+      - AUTH_PASS=${AUTH_PASS:?set AUTH_PASS in .env}
+      - SOLACE_HOST=${SOLACE_HOST:-tcps://ems2.swim.faa.gov:55443}
+      - SOLACE_VPN=${SOLACE_VPN:-AIM_FNS}
+      - SOLACE_USERNAME=${SOLACE_USERNAME:?set SOLACE_USERNAME in .env}
+      - SOLACE_PASSWORD=${SOLACE_PASSWORD:?set SOLACE_PASSWORD in .env}
+      - SOLACE_QUEUE=${SOLACE_QUEUE:?set SOLACE_QUEUE in .env}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
     ports:
       - "5005:5005"
     volumes:
@@ -32,9 +35,9 @@ services:
     image: postgres:16-alpine
     container_name: notam_postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: admin
-      POSTGRES_DB: notam_db
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-notam_db}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -48,8 +51,8 @@ services:
     image: dpage/pgadmin4:latest
     container_name: notam_pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@example.com
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?set PGADMIN_PASSWORD in .env}
     volumes:
       - pgadmin_data:/var/lib/pgadmin
     ports:

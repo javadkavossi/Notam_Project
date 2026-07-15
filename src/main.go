@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
 
 	"github.com/hossein-repo/BaseProject/api"
 	"github.com/hossein-repo/BaseProject/config"
@@ -15,13 +14,6 @@ import (
 	"github.com/hossein-repo/BaseProject/internal/storage"
 	"github.com/hossein-repo/BaseProject/pkg/logging"
 )
-
-func getEnv(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
 
 func main() {
 	cfg := config.GetConfig()
@@ -43,14 +35,13 @@ func main() {
 	// Repository - ذخیره NOTAM در PostgreSQL با ساختار ICAO
 	repo := storage.NewNotamRepository()
 
-	// Solace consumer
-	host := getEnv("SOLACE_HOST", "tcps://ems2.swim.faa.gov:55443")
-	vpn := getEnv("SOLACE_VPN", "AIM_FNS")
-	username := getEnv("SOLACE_USERNAME", "hossein.kavosi2.gmail.com")
-	password := getEnv("SOLACE_PASSWORD", "GK5F9tZFRnqhucFniZhoOw")
-	queue := getEnv("SOLACE_QUEUE", "hossein.kavosi2.gmail.com.AIM_FNS.1696ec1b-7b8d-41e3-8e96-90f62d821170.OUT")
-
-	consumer := messaging.NewSolaceQueueConsumer(host, vpn, username, password, queue)
+	// Solace consumer — همهٔ مقادیر از config/env (E0-1: بدون credential هاردکد)
+	sc := cfg.Solace
+	if sc.Username == "" || sc.Password == "" || sc.Queue == "" {
+		logger.Fatal(logging.General, logging.Startup,
+			"Solace credentials missing: set SOLACE_USERNAME, SOLACE_PASSWORD and SOLACE_QUEUE (see .env.example)", nil)
+	}
+	consumer := messaging.NewSolaceQueueConsumer(sc.Host, sc.VPN, sc.Username, sc.Password, sc.Queue)
 	app := app.Application{
 		Consumer: consumer,
 		Repo:     repo,

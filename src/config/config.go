@@ -18,6 +18,25 @@ type Config struct {
 	Logger   LoggerConfig
 	Otp      OtpConfig
 	JWT      JWTConfig
+	Solace   SolaceConfig
+	Auth     AuthConfig
+}
+
+// SolaceConfig تنظیمات اتصال به منبع NOTAM (FAA SWIM).
+// مقادیر حساس (Username/Password) فقط از متغیر محیطی خوانده می‌شوند و هیچ مقدار پیش‌فرضی در کد ندارند.
+type SolaceConfig struct {
+	Host     string
+	VPN      string
+	Username string
+	Password string
+	Queue    string
+}
+
+// AuthConfig احراز هویت موقت (تا پیاده‌سازی JWT در E0-2/E0-3).
+// از متغیر محیطی خوانده می‌شود؛ بدون مقدار پیش‌فرض محرمانه در کد.
+type AuthConfig struct {
+	User string
+	Pass string
 }
 
 type ServerConfig struct {
@@ -118,7 +137,49 @@ func GetConfig() *Config {
 		log.Printf("Set external port from internal port -> %s", cfg.Server.ExternalPort)
 	}
 
+	applyEnvOverrides(cfg)
+
 	return cfg
+}
+
+// applyEnvOverrides مقادیر حساس و متغیرهای محیطی را روی config اعمال می‌کند.
+// اصل امنیتی (E0-1): هیچ رمز یا نام‌کاربری در کد یا فایل config کامیت نمی‌شود؛
+// این مقادیر فقط از متغیر محیطی می‌آیند. مقادیر غیرحساس (host/vpn/queue) پیش‌فرض دارند.
+func applyEnvOverrides(cfg *Config) {
+	// ---- Solace (منبع NOTAM) ----
+	cfg.Solace.Host = getEnv("SOLACE_HOST", firstNonEmpty(cfg.Solace.Host, "tcps://ems2.swim.faa.gov:55443"))
+	cfg.Solace.VPN = getEnv("SOLACE_VPN", firstNonEmpty(cfg.Solace.VPN, "AIM_FNS"))
+	cfg.Solace.Queue = getEnv("SOLACE_QUEUE", cfg.Solace.Queue)
+	cfg.Solace.Username = getEnv("SOLACE_USERNAME", cfg.Solace.Username) // بدون پیش‌فرض؛ فقط از env
+	cfg.Solace.Password = getEnv("SOLACE_PASSWORD", cfg.Solace.Password) // بدون پیش‌فرض؛ فقط از env
+
+	// ---- Postgres/Redis: اجازهٔ override رمز از env (تا رمز در فایل config نماند) ----
+	cfg.Postgres.Password = getEnv("POSTGRES_PASSWORD", cfg.Postgres.Password)
+	cfg.Redis.Password = getEnv("REDIS_PASSWORD", cfg.Redis.Password)
+
+	// ---- Auth موقت ----
+	cfg.Auth.User = getEnv("AUTH_USER", firstNonEmpty(cfg.Auth.User, "admin"))
+	cfg.Auth.Pass = getEnv("AUTH_PASS", cfg.Auth.Pass) // بدون پیش‌فرض محرمانه
+
+	// ---- JWT secret از env ----
+	cfg.JWT.Secret = getEnv("JWT_SECRET", cfg.JWT.Secret)
+	cfg.JWT.RefreshSecret = getEnv("JWT_REFRESH_SECRET", cfg.JWT.RefreshSecret)
+}
+
+func getEnv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func ParseConfig(v *viper.Viper) (*Config, error) {

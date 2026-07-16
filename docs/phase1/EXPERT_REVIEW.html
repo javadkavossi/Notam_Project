@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>بررسی کارشناسی — رتبه‌بندی اهمیت NOTAM</title>
+<style>
+  :root{
+    --ink:#1a2230; --soft:#4a5568; --faint:#7b8794; --line:#d6dce5;
+    --bg:#ffffff; --panel:#f5f7fa; --accent:#0d5f73; --accent-soft:#e2eef1;
+    --crit:#c02a2a; --high:#c25a17; --med:#b8860b; --low:#2f8a4e; --info:#6b7280;
+    --note:#fff7e6; --note-border:#e8c96a;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-print-color-adjust:exact; print-color-adjust:exact}
+  body{
+    margin:0; background:#e9edf2; color:var(--ink);
+    font-family:"Vazirmatn","IRANSans","Tahoma","Segoe UI",sans-serif;
+    line-height:1.75; font-size:12pt;
+  }
+  .page{
+    max-width:210mm; margin:12px auto; background:var(--bg);
+    padding:22mm 18mm; box-shadow:0 2px 14px rgba(0,0,0,.12);
+  }
+  code,.mono{font-family:"SF Mono","Consolas","Courier New",monospace; direction:ltr; unicode-bidi:isolate; font-size:.86em; background:var(--panel); padding:1px 5px; border-radius:4px}
+  h1{font-size:21pt; margin:0 0 4px; letter-spacing:-.01em}
+  h2{font-size:15pt; margin:26px 0 10px; padding-bottom:6px; border-bottom:2px solid var(--accent); color:var(--accent)}
+  h3{font-size:12.5pt; margin:18px 0 8px}
+  p{margin:8px 0}
+  .lead{color:var(--soft); font-size:12.5pt; margin:6px 0 2px}
+  .meta{display:flex; flex-wrap:wrap; gap:8px 20px; font-size:10.5pt; color:var(--faint); margin:10px 0 4px; padding-bottom:14px; border-bottom:1px solid var(--line)}
+  .meta b{color:var(--ink)}
+  ul,ol{margin:8px 0; padding-inline-start:22px}
+  li{margin:4px 0}
+
+  table{border-collapse:collapse; width:100%; margin:12px 0; font-size:10.5pt}
+  th,td{border:1px solid var(--line); padding:7px 9px; text-align:right; vertical-align:top}
+  thead th{background:var(--accent); color:#fff; font-weight:600; font-size:10pt}
+  tbody tr:nth-child(even){background:var(--panel)}
+  td.c,th.c{text-align:center; white-space:nowrap}
+  .fill{background:#fffdf5; min-width:70px}
+
+  .lv{display:inline-block; padding:1px 8px; border-radius:20px; font-size:9pt; font-weight:700; color:#fff; white-space:nowrap}
+  .b-crit{background:var(--crit)} .b-high{background:var(--high)} .b-med{background:var(--med)} .b-low{background:var(--low)} .b-info{background:var(--info)}
+
+  .note{background:var(--note); border:1px solid var(--note-border); border-radius:8px; padding:11px 15px; margin:12px 0; font-size:11pt}
+  .note b{color:#9a6a00}
+  .box{background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 16px; margin:12px 0}
+  .qsplit{font-family:"SF Mono",monospace; direction:ltr; font-size:15pt; letter-spacing:6px; text-align:center; margin:6px 0}
+  .formula{background:var(--accent-soft); border-radius:8px; padding:10px 16px; text-align:center; direction:rtl; font-weight:600; color:var(--accent); margin:10px 0}
+
+  .print-hint{background:var(--accent); color:#fff; text-align:center; padding:10px; font-size:11pt; border-radius:8px; margin:0 auto 14px; max-width:210mm}
+  .print-hint b{background:rgba(255,255,255,.2); padding:1px 8px; border-radius:5px}
+
+  @media print{
+    body{background:#fff}
+    .page{box-shadow:none; margin:0; max-width:none; padding:0}
+    .print-hint{display:none}
+    h2{break-after:avoid}
+    table{break-inside:auto}
+    tr{break-inside:avoid}
+    thead{display:table-header-group}
+  }
+  @page{size:A4; margin:14mm}
+</style>
+</head>
+<body>
+
+<div class="print-hint">
+  برای ساخت PDF: در مرورگر <b>Ctrl/Cmd + P</b> بزنید و «Save as PDF» را انتخاب کنید. (این نوار در چاپ نمایش داده نمی‌شود.)
+</div>
+
+<div class="page">
+
+<h1>بررسی کارشناسی — سامانهٔ رتبه‌بندی اهمیت NOTAM</h1>
+<p class="lead">تأیید صحت دسته‌بندی و رتبه‌بندی اهمیت NOTAMها پیش از استفادهٔ عملیاتی</p>
+<div class="meta">
+  <span>مخاطب: <b>کارشناس هوانوردی</b> (خلبان / دیسپچر / AIS)</span>
+  <span>نسخهٔ منطق وزن‌دهی: <b>1.0.0</b></span>
+  <span>مبنای داده: <b>۹۰۵ NOTAM واقعی FAA — فوریه ۲۰۲۲</b></span>
+</div>
+
+<p>این سیستم به‌صورت خودکار هر NOTAM را می‌خواند، دسته‌بندی می‌کند و یک <b>امتیاز اهمیت (۰ تا ۱۰۰)</b> و یک <b>سطح</b> به آن می‌دهد تا خلبان سریع‌تر موارد مهم را ببیند. به تأیید شما نیاز داریم که این قضاوت‌ها از نظر عملیاتی درست‌اند.</p>
+
+<div class="note">
+  <b>چرا نظر شما حیاتی است.</b> این سامانهٔ ایمنی‌محور است و دو خطای متضاد هر دو خطرناک‌اند:
+  <b>کم‌گویی</b> (یک NOTAM مهم کم‌اهمیت نشان داده شود و از کنارش رد شویم) و
+  <b>گرگ‌گویی</b> (آن‌قدر «بحرانی» نشان دهد که خلبان به کل هشدارها بی‌اعتماد شود).
+  منطق فعلی کاملاً قاعده‌محور و قابل‌توضیح است — هر امتیاز قابل ردیابی و طبق نظر شما قابل تنظیم. <b>قضاوت عملیاتی با شماست.</b>
+</div>
+
+<h2>سیستم چطور امتیاز می‌دهد؟</h2>
+<p>هر NOTAM یک کد استاندارد ICAO پنج‌حرفی دارد (مثل <code>QMRLC</code>) که ماشین‌خوان است:</p>
+<div class="box">
+  <div class="qsplit">Q&nbsp;<b style="color:var(--accent)">MR</b>&nbsp;<b style="color:var(--high)">LC</b></div>
+  <div style="text-align:center; font-size:10.5pt; color:var(--soft)">موضوع MR = «باند» &nbsp;·&nbsp; وضعیت LC = «بسته» &nbsp;→&nbsp; <b style="color:var(--ink)">«باند بسته»</b></div>
+</div>
+<div class="formula">امتیاز = وزنِ دستهٔ موضوع + تعدیلِ وضعیت + امتیازِ پرچم‌های بحرانی</div>
+
+<h3>نگاشت امتیاز به سطح</h3>
+<table>
+  <thead><tr><th class="c">سطح</th><th class="c">بازهٔ امتیاز</th><th>نمایش برای خلبان</th></tr></thead>
+  <tbody>
+    <tr><td class="c"><span class="lv b-crit">بحرانی</span></td><td class="c">۸۰–۱۰۰</td><td>بولد، بالای فهرست، اخطار اجباری</td></tr>
+    <tr><td class="c"><span class="lv b-high">بالا</span></td><td class="c">۶۰–۷۹</td><td>برجسته</td></tr>
+    <tr><td class="c"><span class="lv b-med">متوسط</span></td><td class="c">۳۵–۵۹</td><td>عادی</td></tr>
+    <tr><td class="c"><span class="lv b-low">پایین</span></td><td class="c">۱۵–۳۴</td><td>جمع‌شده</td></tr>
+    <tr><td class="c"><span class="lv b-info">اطلاعی</span></td><td class="c">۰–۱۴</td><td>جمع‌شده</td></tr>
+  </tbody>
+</table>
+<div class="note">یک NOTAM می‌تواند برای یک پرواز بحرانی و برای پرواز دیگر کم‌اهمیت باشد (مثلاً «باند ۲۹ بسته» فقط اگر روی همان باند فرود بیاییم). این تعدیلِ «وابسته به پرواز» جداست؛ <b>در این بررسی روی امتیاز پایه تمرکز کنید.</b></div>
+
+<h2>۱) جدول وزن دسته‌ها — آیا این ترتیب و مقادیر درست است؟</h2>
+<table>
+  <thead><tr><th>دسته</th><th class="c">وزن</th><th>توضیح</th><th class="c fill">نظر شما (درست/چند؟)</th></tr></thead>
+  <tbody>
+    <tr><td>فرودگاه (AERODROME)</td><td class="c">78</td><td>کل فرودگاه — فقط <code>FA</code>/<code>FP</code></td><td class="fill"></td></tr>
+    <tr><td>باند (RUNWAY)</td><td class="c">70</td><td>باند، آستانه، فاصله‌های اعلامی</td><td class="fill"></td></tr>
+    <tr><td>آتش‌نشانی/نجات (RESCUE)</td><td class="c">62</td><td>RFFS</td><td class="fill"></td></tr>
+    <tr><td>فضای هوایی (AIRSPACE)</td><td class="c">55</td><td>ساختار، FIR، مسیر</td><td class="fill"></td></tr>
+    <tr><td>محدودیت (RESTRICTION)</td><td class="c">55</td><td>ممنوعه/خطرناک/محدود</td><td class="fill"></td></tr>
+    <tr><td>خدمات ATS (ATS)</td><td class="c">55</td><td>برج، نزدیکی، رادار، FIS</td><td class="fill"></td></tr>
+    <tr><td>ILS</td><td class="c">50</td><td>سامانهٔ فرود دقیق</td><td class="fill"></td></tr>
+    <tr><td>رویه‌ها (PROCEDURE)</td><td class="c">50</td><td>SID / STAR / نزدیکی</td><td class="fill"></td></tr>
+    <tr><td>GPS / GNSS</td><td class="c">50</td><td>—</td><td class="fill"></td></tr>
+    <tr><td>هواشناسی (MET)</td><td class="c">45</td><td>RVR، باد، سقف، اصطکاک</td><td class="fill"></td></tr>
+    <tr><td>هشدار (WARNING)</td><td class="c">45</td><td>تیراندازی، پهپاد، بالن</td><td class="fill"></td></tr>
+    <tr><td>مانع (OBSTACLE)</td><td class="c">45</td><td>—</td><td class="fill"></td></tr>
+    <tr><td>ناوبری (NAVIGATION)</td><td class="c">45</td><td>VOR / DME / NDB</td><td class="fill"></td></tr>
+    <tr><td>روشنایی (LIGHTING)</td><td class="c">40</td><td>روشنایی باند/نزدیکی</td><td class="fill"></td></tr>
+    <tr><td>ارتباطات (COMMS)</td><td class="c">40</td><td>رادار / مخابرات</td><td class="fill"></td></tr>
+    <tr><td>تاکسی‌وی (TAXIWAY)</td><td class="c">38</td><td>—</td><td class="fill"></td></tr>
+    <tr><td>سطح حرکت — نامشخص</td><td class="c">35</td><td>کد گروه M با موضوع ناشناخته</td><td class="fill"></td></tr>
+    <tr><td>خدمات فرودگاهی (SERVICE)</td><td class="c">28</td><td>سوخت، اکسیژن، گمرک، برف‌روبی</td><td class="fill"></td></tr>
+    <tr><td>سایر (OTHER)</td><td class="c">20</td><td>اداری / متفرقه</td><td class="fill"></td></tr>
+  </tbody>
+</table>
+<p style="font-size:10.5pt; color:var(--soft)"><b>سؤالات کلیدی:</b> آیا نبود آتش‌نشانی (RESCUE) عملاً = تعطیلی فرودگاه است و باید بالاتر باشد؟ آیا نبود RVR/باد (MET) برای عملیات کم‌دید باید بالاتر باشد؟</p>
+
+<h2>۲) تعدیل بر اساس وضعیت</h2>
+<table>
+  <thead><tr><th>وضعیت</th><th class="c">تعدیل</th><th class="c fill">نظر شما</th></tr></thead>
+  <tbody>
+    <tr><td>بسته (Closed)</td><td class="c">+۳۰</td><td class="fill"></td></tr>
+    <tr><td>ممنوع (Prohibited)</td><td class="c">+۲۷</td><td class="fill"></td></tr>
+    <tr><td>ناایمن (Unsafe)</td><td class="c">+۲۶</td><td class="fill"></td></tr>
+    <tr><td>غیرقابل‌استفاده (U/S)</td><td class="c">+۲۲</td><td class="fill"></td></tr>
+    <tr><td>بسته به IFR</td><td class="c">+۲۰</td><td class="fill"></td></tr>
+    <tr><td>خطر (Hazard)</td><td class="c">+۲۰</td><td class="fill"></td></tr>
+    <tr><td>در حال آزمایش، استفاده نکنید</td><td class="c">+۱۵</td><td class="fill"></td></tr>
+    <tr><td>فعال‌شده / برپاشده</td><td class="c">+۱۲</td><td class="fill"></td></tr>
+    <tr><td>محدود به (Limited)</td><td class="c">+۸</td><td class="fill"></td></tr>
+    <tr><td>تکمیل‌شده / کار تمام شد</td><td class="c">−۱۲</td><td class="fill"></td></tr>
+    <tr><td>عملیاتی / از سرگرفته‌شده</td><td class="c">−۱۸</td><td class="fill"></td></tr>
+    <tr><td>لغو (Cancelled)</td><td class="c">−۵۰</td><td class="fill"></td></tr>
+  </tbody>
+</table>
+
+<h2>۳) پرچم‌های بحرانی (امتیاز اضافی + برجسته‌سازی)</h2>
+<table>
+  <thead><tr><th>پرچم</th><th class="c">امتیاز</th><th>شرط</th><th class="c fill">نظر شما</th></tr></thead>
+  <tbody>
+    <tr><td>فرودگاه بسته (AD_CLOSED)</td><td class="c">+۱۲</td><td>—</td><td class="fill"></td></tr>
+    <tr><td>باند بسته (RWY_CLOSED)</td><td class="c">+۱۰</td><td>—</td><td class="fill"></td></tr>
+    <tr><td>FICON (وضعیت سطح باند)</td><td class="c">+۸</td><td>متن شامل FICON</td><td class="fill"></td></tr>
+    <tr><td>خرابی ILS / GPS</td><td class="c">+۶</td><td>—</td><td class="fill"></td></tr>
+    <tr><td>مانع (OBSTACLE)</td><td class="c">+۳</td><td>—</td><td class="fill"></td></tr>
+  </tbody>
+</table>
+<p style="font-size:10.5pt; color:var(--soft)"><b>سؤال:</b> آیا پرچم مهمی جا مانده؟ (بستهٔ موقت به‌دلیل برف، تغییر فرکانس اضطراری، محدودیت وزن باند…)</p>
+
+<h2>۴) نمونه‌های واقعی — لطفاً «سطح درست» را تأیید یا اصلاح کنید</h2>
+<p style="font-size:10.5pt; color:var(--soft)">این‌ها NOTAMهای واقعی (فوریه ۲۰۲۲، منبع FAA)اند. ستون آخر را پر کنید.</p>
+<table>
+  <thead><tr><th>متن NOTAM</th><th class="c">Q-code</th><th class="c">دسته</th><th class="c">سطح سیستم</th><th class="c fill">سطح درست؟</th></tr></thead>
+  <tbody>
+    <tr><td><code>AD TUZLA CLOSED</code></td><td class="c">QFALC</td><td class="c">فرودگاه</td><td class="c"><span class="lv b-crit">بحرانی</span></td><td class="fill"></td></tr>
+    <tr><td><code>RWY 07R/25L CLSD DUE TO WIP</code></td><td class="c">QMRLC</td><td class="c">باند</td><td class="c"><span class="lv b-crit">بحرانی</span></td><td class="fill"></td></tr>
+    <tr><td><code>RFFS NOT AVBL</code> (آتش‌نشانی)</td><td class="c">QFFAS</td><td class="c">نجات</td><td class="c"><span class="lv b-crit">بحرانی ۸۴</span></td><td class="fill"></td></tr>
+    <tr><td><code>AD CLSD FOR FIXED WING ACFT</code></td><td class="c">QFALT</td><td class="c">فرودگاه</td><td class="c"><span class="lv b-crit">بحرانی ۹۸</span></td><td class="fill"></td></tr>
+    <tr style="background:#fff7e6"><td>⚠️ <code>LIMITED ACFT STANDS, ALL DIVERSIONS…</code></td><td class="c">QFALT</td><td class="c">فرودگاه</td><td class="c"><span class="lv b-crit">بحرانی ۸۶</span></td><td class="fill"></td></tr>
+    <tr><td><code>SFC WIND SENSOR U/S</code></td><td class="c">QFMAU</td><td class="c">هواشناسی</td><td class="c"><span class="lv b-high">بالا ۶۷</span></td><td class="fill"></td></tr>
+    <tr><td><code>RWY MID RVR VALUES NOT AVBL</code></td><td class="c">QFTAS</td><td class="c">هواشناسی</td><td class="c"><span class="lv b-high">بالا ۶۷</span></td><td class="fill"></td></tr>
+    <tr><td><code>TWR NOT AVBL EXC EMERG</code> (برج)</td><td class="c">QSTLC</td><td class="c">خدمات ATS</td><td class="c"><span class="lv b-high">بالا</span></td><td class="fill"></td></tr>
+    <tr><td><code>RAPID EXIT TWY N5 CLOSED</code></td><td class="c">QMYLC</td><td class="c">تاکسی‌وی</td><td class="c"><span class="lv b-high">بالا ۶۸</span></td><td class="fill"></td></tr>
+    <tr><td><code>RESTRICTED AREA EKR18 ACTIVATED</code></td><td class="c">QRRCA</td><td class="c">محدودیت</td><td class="c"><span class="lv b-high">بالا ۶۷</span></td><td class="fill"></td></tr>
+    <tr><td><code>FUEL / 100LL NOT AVBL</code> (سوخت)</td><td class="c">QFUAU</td><td class="c">خدمات</td><td class="c"><span class="lv b-med">متوسط ۵۰</span></td><td class="fill"></td></tr>
+    <tr><td><code>NO THROUGH TAXIING TWY A TO F2</code></td><td class="c">QMXXX</td><td class="c">تاکسی‌وی</td><td class="c"><span class="lv b-med">متوسط ۳۸</span></td><td class="fill"></td></tr>
+    <tr><td><code>NOTAM CANCELLED</code></td><td class="c">QxxCN</td><td class="c">—</td><td class="c"><span class="lv b-low">پایین</span></td><td class="fill"></td></tr>
+  </tbody>
+</table>
+<div class="note"><b>مورد مشکوکی که خودمان یافتیم:</b> ردیف علامت‌دار (<code>QFALT</code> با متن «تعداد محدود stand، همهٔ diversionها…») امتیاز ۸۶/بحرانی گرفته، در حالی که این یک <b>trigger NOTAM / محدودیت پذیرش</b> است، نه بستن واقعی فرودگاه. به‌نظر شما بحرانی درست است یا بالا/متوسط؟</div>
+
+<h2>۵) توزیع کلی — آیا متعادل است؟</h2>
+<p>سیستم روی ۹۰۵ NOTAM واقعی این توزیع را تولید کرد:</p>
+<table>
+  <thead><tr><th class="c">سطح</th><th class="c">تعداد</th><th class="c">درصد</th><th>نوار</th></tr></thead>
+  <tbody>
+    <tr><td class="c"><span class="lv b-crit">بحرانی</span></td><td class="c">۹۴</td><td class="c">٪۱۰</td><td><div style="background:var(--crit); height:14px; width:10%"></div></td></tr>
+    <tr><td class="c"><span class="lv b-high">بالا</span></td><td class="c">۴۴۳</td><td class="c">٪۴۹</td><td><div style="background:var(--high); height:14px; width:49%"></div></td></tr>
+    <tr><td class="c"><span class="lv b-med">متوسط</span></td><td class="c">۲۷۸</td><td class="c">٪۳۱</td><td><div style="background:var(--med); height:14px; width:31%"></div></td></tr>
+    <tr><td class="c"><span class="lv b-low">پایین</span></td><td class="c">۴۸</td><td class="c">٪۵</td><td><div style="background:var(--low); height:14px; width:5%"></div></td></tr>
+    <tr><td class="c"><span class="lv b-info">اطلاعی</span></td><td class="c">۴۲</td><td class="c">٪۵</td><td><div style="background:var(--info); height:14px; width:5%"></div></td></tr>
+  </tbody>
+</table>
+<div class="note"><b>سؤال کلیدی:</b> آیا ٪۴۹ در سطح «بالا» بیش از حد است؟ اگر تقریباً نیمی از NOTAMها «بالا» باشند، این سطح معنایش را از دست می‌دهد. راه‌حل‌ها: (الف) آستانهٔ «بالا» از ۶۰ به ۶۵/۷۰ برود؟ (ب) وزن برخی دسته‌ها کم شود؟ (ج) همین درست است چون داده مربوط به دورهٔ پرتنش (بحران اوکراین) است؟ <br>توجه: غلبهٔ «محدودیت فضای هوایی» (۳۲۳ از ۹۰۵) طبیعی است.</div>
+
+<h2>۶) پوشش Q-code — آیا موردی جا مانده؟</h2>
+<p style="font-size:10.5pt; color:var(--soft)">کدهای زیر در داده دیده شدند ولی کامل شناسایی نشدند (به دستهٔ کلی افتادند). کدام‌ها مهم‌اند؟</p>
+<table>
+  <thead><tr><th class="c">کد</th><th class="c">تعداد</th><th>معنی احتمالی</th><th class="c fill">تأیید/اصلاح شما</th></tr></thead>
+  <tbody>
+    <tr><td class="c">SP</td><td class="c">۱۷</td><td>کنترل نزدیکی (approach control)</td><td class="fill"></td></tr>
+    <tr><td class="c">ST</td><td class="c">۱۲</td><td>برج مراقبت (tower)</td><td class="fill"></td></tr>
+    <tr><td class="c">MA</td><td class="c">۴</td><td>کل محوطهٔ مانور (movement area)</td><td class="fill"></td></tr>
+    <tr><td class="c">SE</td><td class="c">۳</td><td>خدمات اطلاعات پرواز (FIS)</td><td class="fill"></td></tr>
+    <tr><td class="c">FU</td><td class="c">۴</td><td>سوخت (fuel)</td><td class="fill"></td></tr>
+  </tbody>
+</table>
+
+<h2>چه چیزهایی باید در نظر بگیرید</h2>
+<ol>
+  <li><b>آیا سطح با واکنش عملیاتی خلبان می‌خواند؟</b> «بحرانی» = ممکن است پرواز را لغو/منحرف کنی؛ «بالا» = حتماً بخوان و در تصمیم لحاظ کن.</li>
+  <li><b>گرگ‌گویی:</b> موردی هست که به‌غلط بحرانی/بالا شده و باعث بی‌اعتمادی می‌شود؟</li>
+  <li><b>کم‌گویی:</b> موردی هست که سیستم دست‌کم گرفته و باید بالاتر باشد؟</li>
+  <li><b>تفاوت فاز پرواز:</b> دسته‌ای هست که برای فاز خاصی (مثلاً فرود کم‌دید) اهمیت متفاوتی دارد؟</li>
+  <li><b>موارد منطقه‌ای/کشوری:</b> رویه‌ای هست که در منطقهٔ عملیاتی شما معنای متفاوتی دارد؟</li>
+  <li><b>پرچم‌های جامانده:</b> نوع NOTAMی هست که باید همیشه برجسته شود ولی در بخش ۳ نیست؟</li>
+</ol>
+
+<h2>چطور بازخورد بدهید</h2>
+<p>هر شکلی که راحت‌تر است: روی ستون‌های «نظر شما» بنویسید، یا فهرست ساده «Q-code فلان باید سطح فلان باشد چون…». به‌ویژه روی <b>موارد اختلافی</b> و <b>موارد جامانده</b> تمرکز کنید — همان‌ها بیشترین ارزش را دارند.</p>
+<p style="font-size:10pt; color:var(--faint); margin-top:20px; border-top:1px solid var(--line); padding-top:10px">هر تغییری که تأیید کنید اعمال و نسخهٔ منطق افزایش داده می‌شود و همهٔ NOTAMهای موجود با منطق جدید بازپردازش می‌شوند (بدون نیاز به دریافت مجدد). — مرجع فنی: docs/phase1/QCODE_WEIGHTS.md</p>
+
+</div>
+</body>
+</html>

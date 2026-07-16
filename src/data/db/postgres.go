@@ -11,7 +11,6 @@ import (
 )
 
 var dbClient *gorm.DB
-var logger = logging.NewLogger(config.GetConfig())
 
 func InitDb(cfg *config.Config) error {
 	var err error
@@ -33,7 +32,11 @@ func InitDb(cfg *config.Config) error {
 	sqlDb.SetMaxIdleConns(cfg.Postgres.MaxIdleConns)
 	sqlDb.SetMaxOpenConns(cfg.Postgres.MaxOpenConns)
 	sqlDb.SetConnMaxLifetime(cfg.Postgres.ConnMaxLifetime * time.Minute)
-	logger.Info(logging.Postgres, logging.Startup, "Db connection established", nil)
+
+	// لاگر اینجا ساخته می‌شود (نه در سطح پکیج) تا صرفِ import کردن این پکیج،
+	// خواندن فایل config را اجباری نکند — در غیر این صورت تست‌های واحدِ
+	// پکیج‌های وابسته هنگام init با Fatal شکست می‌خورند.
+	logging.NewLogger(cfg).Info(logging.Postgres, logging.Startup, "Db connection established", nil)
 	return nil
 }
 

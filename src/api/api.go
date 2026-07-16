@@ -40,6 +40,8 @@ func registerRoutes(r *gin.Engine, cfg *config.Config) {
 		routers.Notam(notams, cfg)
 		ref := v1.Group("/reference")
 		routers.Reference(ref)
+		flights := v1.Group("/flights")
+		routers.Flight(flights, cfg)
 	}
 }
 

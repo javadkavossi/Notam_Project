@@ -248,6 +248,13 @@ func tagBonus(tags []string) int {
 	return bonus
 }
 
+// LevelFor سطح اهمیت را از امتیاز محاسبه می‌کند (همان آستانه‌های امتیاز پایه).
+// موتور بریفینگ برای امتیاز کانتکستی از همین تابع استفاده می‌کند تا سطوح یکسان بمانند.
+func LevelFor(score int) string { return level(score) }
+
+// Clamp امتیاز را در بازهٔ ۰..۱۰۰ نگه می‌دارد.
+func Clamp(score int) int { return clamp(score) }
+
 func level(score int) string {
 	switch {
 	case score >= 80:

@@ -34,6 +34,7 @@ func createTables(database *gorm.DB) {
 		model.Navaid{},
 		model.FIR{},
 		model.RefDatasetVersion{},
+		model.FlightPlan{},
 		model.Notam{},
 		model.NotamAlertSettings{},
 		model.NotamAlertDelivery{},

@@ -22,8 +22,17 @@ const (
 	// عمداً از RUNWAY جدا است: نسبت‌دادن «باند» به یک کد ناشناخته باعث تشدید
 	// خطرناکِ اهمیت می‌شود (مثلاً بستن تاکسی‌وی → «باند بسته»).
 	CatMovementArea = "MOVEMENT_AREA"
-	CatLighting    = "LIGHTING"
-	CatILS         = "ILS"
+	CatLighting = "LIGHTING"
+	CatILS      = "ILS"
+	// CatService تسهیلات/خدمات فرودگاهی (سوخت، اکسیژن، گمرک، برف‌روبی…).
+	// عمداً از AERODROME جدا است: «سوخت موجود نیست» با «فرودگاه بسته» یکی نیست.
+	CatService = "SERVICE"
+	// CatRescue آتش‌نشانی و نجات (RFFS) — نبودش عملاً محدودکنندهٔ عملیات تجاری است.
+	CatRescue = "RESCUE"
+	// CatMet خدمات هواشناسی و اندازه‌گیری (RVR، باد، سقف ابر، اصطکاک).
+	CatMet = "MET"
+	// CatATS خدمات ترافیک هوایی (برج، نزدیکی، رادار، اطلاعات پرواز).
+	CatATS = "ATS"
 	CatNavigation  = "NAVIGATION"
 	CatGNSS        = "GNSS"
 	CatComms       = "COMMS"
@@ -74,10 +83,40 @@ var subjectMap = map[string]subjectInfo{
 	"MB": {CatMovementArea, "Bearing strength"},
 	"MC": {CatMovementArea, "Clearway"},
 	"MM": {CatMovementArea, "Daylight markings"},
-	// Facilities (F)
+	// Facilities and services (F).
+	// ⚠️ فقط FA/FP خودِ «فرودگاه»اند؛ بقیه تجهیزات/خدمات‌اند و نباید وزن فرودگاه بگیرند.
 	"FA": {CatAerodrome, "Aerodrome"},
-	"FF": {CatAerodrome, "Fire and rescue"},
-	"FU": {CatAerodrome, "Fuel availability"},
+	"FP": {CatAerodrome, "Heliport"},
+	"FF": {CatRescue, "Fire fighting and rescue"},
+	"FB": {CatMet, "Friction measuring device"},
+	"FC": {CatMet, "Ceiling measurement equipment"},
+	"FM": {CatMet, "Meteorological service"},
+	"FT": {CatMet, "Transmissometer (RVR)"},
+	"FW": {CatMet, "Wind direction indicator"},
+	"FU": {CatService, "Fuel availability"},
+	"FE": {CatService, "Oxygen"},
+	"FJ": {CatService, "Oils"},
+	"FD": {CatService, "Docking system"},
+	"FS": {CatService, "Snow removal equipment"},
+	"FZ": {CatService, "Customs/immigration"},
+	"FG": {CatService, "Ground movement control"},
+	"FH": {CatAerodrome, "Helicopter alighting area"},
+	"FI": {CatService, "Fog dispersal system"},
+	"FL": {CatLighting, "Landing direction indicator"},
+	// Air traffic and VOLMET services (S) — قبلاً کاملاً جا افتاده بود و همه به OTHER می‌رفتند
+	"SA": {CatATS, "Automatic terminal information service (ATIS)"},
+	"SB": {CatATS, "ATS reporting office"},
+	"SC": {CatATS, "Area control centre"},
+	"SE": {CatATS, "Flight information service"},
+	"SF": {CatATS, "Aerodrome flight information service"},
+	"SL": {CatATS, "Flow control centre"},
+	"SO": {CatATS, "Oceanic area control centre"},
+	"SP": {CatATS, "Approach control service"},
+	"SS": {CatATS, "Flight service station"},
+	"ST": {CatATS, "Aerodrome control tower"},
+	"SU": {CatATS, "Upper area control centre"},
+	"SV": {CatATS, "VOLMET broadcast"},
+	"SY": {CatATS, "Upper advisory service"},
 	// Lighting (L)
 	"LA": {CatLighting, "Approach lighting system"},
 	"LB": {CatLighting, "Aerodrome beacon"},
@@ -162,7 +201,9 @@ var subjectMap = map[string]subjectInfo{
 // انتخاب می‌شود تا اهمیت به‌غلط تشدید نشود (Recognized=false هم ثبت می‌شود).
 var subjectByFirstLetter = map[byte]subjectInfo{
 	'M': {CatMovementArea, "Movement area"},
-	'F': {CatAerodrome, "Facility/service"},
+	// گروه F عمدتاً تجهیزات/خدمات است؛ fallback نباید وزن «فرودگاه» (پرخطرترین عضو گروه) بگیرد.
+	'F': {CatService, "Facility/service"},
+	'S': {CatATS, "Air traffic service"},
 	'L': {CatLighting, "Lighting facility"},
 	'I': {CatILS, "ILS/MLS"},
 	'G': {CatGNSS, "GNSS service"},

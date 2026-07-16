@@ -140,6 +140,43 @@ func TestUnknownSubjectDoesNotEscalate(t *testing.T) {
 	}
 }
 
+// حفاظ ایمنی (رگرسیون از دادهٔ واقعی): تجهیزات/خدمات گروه F نباید وزن «فرودگاه» بگیرند.
+// قبلاً fallback حرف اولِ F همه را به AERODROME(78) می‌برد و «سوخت موجود نیست» یا
+// «سنسور باد خراب» با امتیاز ۱۰۰ بحرانی می‌شد — گرگ‌گویی که اعتماد را از بین می‌برد.
+func TestFacilityNotScoredAsAerodrome(t *testing.T) {
+	adClosed := Analyze(messaging.NotamEvent{QCode: "QFALC", Text: "AD CLSD"})
+	fuel := Analyze(messaging.NotamEvent{QCode: "QFUAU", Text: "100LL NOT AVBL"})
+	windIndicator := Analyze(messaging.NotamEvent{QCode: "QFWAS", Text: "SFC WIND DISPLAY IN TWR U/S"})
+
+	if adClosed.BaseLevel != LevelCritical {
+		t.Errorf("«فرودگاه بسته» باید بحرانی بماند، دریافت %s", adClosed.BaseLevel)
+	}
+	if fuel.Category == qcode.CatAerodrome {
+		t.Error("«سوخت» نباید دستهٔ AERODROME بگیرد")
+	}
+	if fuel.BaseLevel == LevelCritical {
+		t.Errorf("«سوخت موجود نیست» نباید بحرانی باشد (score=%d)", fuel.BaseScore)
+	}
+	if windIndicator.BaseLevel == LevelCritical {
+		t.Errorf("«نمایشگر باد خراب» نباید بحرانی باشد (score=%d)", windIndicator.BaseScore)
+	}
+	if fuel.BaseScore >= adClosed.BaseScore {
+		t.Errorf("سوخت (%d) نباید ≥ فرودگاه بسته (%d)", fuel.BaseScore, adClosed.BaseScore)
+	}
+}
+
+// گروه S (خدمات ATS) قبلاً کاملاً جا افتاده بود و «برج بسته» به OTHER(20) می‌رفت.
+func TestATSServicesRecognized(t *testing.T) {
+	twr := Analyze(messaging.NotamEvent{QCode: "QSTLC", Text: "TWR NOT AVBL"})
+	if twr.Category != qcode.CatATS {
+		t.Errorf("QSTLC (برج) باید ATS شود، دریافت %q", twr.Category)
+	}
+	other := Analyze(messaging.NotamEvent{QCode: "QOAXX", Text: "SOMETHING"})
+	if twr.BaseScore <= other.BaseScore {
+		t.Errorf("«برج بسته» (%d) باید > سایر (%d) باشد", twr.BaseScore, other.BaseScore)
+	}
+}
+
 func TestScoreOrdering(t *testing.T) {
 	// باند بسته باید مهم‌تر از تاکسی‌وی بسته باشد؛ هر دو از NOTAM لغوشده مهم‌تر
 	rwy := Analyze(messaging.NotamEvent{QCode: "QMRLC", Text: "RWY CLSD"}).BaseScore

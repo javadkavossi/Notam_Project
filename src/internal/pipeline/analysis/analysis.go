@@ -73,10 +73,14 @@ var categoryBase = map[string]int{
 	qcode.CatApron:        25,
 	qcode.CatAirspace:    55,
 	qcode.CatRestriction: 55,
+	qcode.CatATS:         55, // برج/نزدیکی/رادار در دسترس نیست
+	qcode.CatRescue:      62, // نبودِ RFFS عملاً محدودکنندهٔ عملیات تجاری است
 	qcode.CatProcedure:   50,
+	qcode.CatMet:         45, // RVR/باد/سقف — برای عملیات کم‌دید مهم
 	qcode.CatComms:       40,
 	qcode.CatWarning:     45,
 	qcode.CatObstacle:    45,
+	qcode.CatService:     28, // سوخت/اکسیژن/گمرک — مهم ولی نه در حد بستن فرودگاه
 	qcode.CatOther:       20,
 }
 
@@ -127,6 +131,10 @@ var categoryPhases = map[string][]string{
 	qcode.CatNavigation:  {PhaseEnroute, PhaseApproach},
 	qcode.CatGNSS:        {PhaseEnroute, PhaseApproach},
 	qcode.CatComms:       {PhaseEnroute, PhaseApproach},
+	qcode.CatATS:         {PhaseDeparture, PhaseEnroute, PhaseApproach},
+	qcode.CatRescue:      {PhaseDeparture, PhaseLanding},
+	qcode.CatMet:         {PhaseApproach, PhaseLanding},
+	qcode.CatService:     {PhaseGround},
 	qcode.CatAirspace:    {PhaseEnroute},
 	qcode.CatRestriction: {PhaseEnroute},
 	qcode.CatProcedure:   {PhaseDeparture, PhaseApproach},

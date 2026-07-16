@@ -76,12 +76,14 @@ var arrivalCategories = map[string]bool{
 	qcode.CatRunway: true, qcode.CatILS: true, qcode.CatLighting: true,
 	qcode.CatNavigation: true, qcode.CatAerodrome: true, qcode.CatProcedure: true,
 	qcode.CatGNSS: true, qcode.CatObstacle: true,
+	qcode.CatMet: true, qcode.CatATS: true, qcode.CatRescue: true,
 }
 
 // دسته‌هایی که به فاز خروج مربوط‌اند.
 var departureCategories = map[string]bool{
 	qcode.CatRunway: true, qcode.CatAerodrome: true, qcode.CatProcedure: true,
 	qcode.CatTaxiway: true, qcode.CatLighting: true, qcode.CatObstacle: true,
+	qcode.CatATS: true, qcode.CatRescue: true, qcode.CatMovementArea: true,
 }
 
 // Build بریفینگ را از NOTAMهای از‌پیش‌فیلترشده و پرواز می‌سازد (منطق خالص).
@@ -263,6 +265,16 @@ func categoryFa(c string) string {
 		return "GPS/GNSS"
 	case qcode.CatComms:
 		return "ارتباطات"
+	case qcode.CatATS:
+		return "خدمات کنترل ترافیک"
+	case qcode.CatRescue:
+		return "آتش‌نشانی و نجات"
+	case qcode.CatMet:
+		return "هواشناسی/RVR"
+	case qcode.CatService:
+		return "خدمات فرودگاهی"
+	case qcode.CatMovementArea:
+		return "سطح حرکت"
 	case qcode.CatAirspace:
 		return "فضای هوایی"
 	case qcode.CatRestriction:

@@ -39,6 +39,17 @@ type Notam struct {
 	// XML خام از FAA (برای audit و بازسازی)
 	RawBody string `gorm:"type:TEXT"`
 
+	// ---- تحلیل و امتیاز اهمیت (E3) ----
+	QCode        string      `gorm:"size:8;index"`  // کد Q استخراج/دیکدشده مثل QMRLC
+	QSubject     string      `gorm:"size:4"`        // موضوع (۲ حرف) MR
+	QCondition   string      `gorm:"size:4"`        // وضعیت (۲ حرف) LC
+	Category     string      `gorm:"size:20;index"` // RUNWAY/NAVIGATION/AIRSPACE/…
+	FlightPhases StringSlice `gorm:"type:TEXT"`     // DEPARTURE/ENROUTE/APPROACH/…
+	Tags         StringSlice `gorm:"type:TEXT"`     // FICON/RWY_CLOSED/…
+	BaseScore    int         `gorm:"index"`         // ۰..۱۰۰ مستقل از پرواز
+	BaseLevel    string      `gorm:"size:10;index"` // CRITICAL/HIGH/MEDIUM/LOW/INFO
+	WeightsVer   string      `gorm:"size:12"`       // نسخهٔ جدول وزن‌دهی (audit)
+
 	// ارجاع اختیاری (بدون FK - NOTAMها از فرودگاه‌های مختلف FAA می‌آیند)
 	AirportICAO string `gorm:"size:8;index"` // کد ICAO محل - لزوماً در جدول airports نیست
 	RunwayID    *uint  `gorm:"index"`

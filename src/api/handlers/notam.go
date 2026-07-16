@@ -46,6 +46,14 @@ type NotamItem struct {
 	LowerLimit     string     `json:"lowerLimit,omitempty"`
 	UpperLimit     string     `json:"upperLimit,omitempty"`
 	CreatedAt      time.Time  `json:"createdAt"`
+
+	// تحلیل و اهمیت (E3)
+	QCode        string   `json:"qcode,omitempty"`
+	Category     string   `json:"category,omitempty"`
+	FlightPhases []string `json:"flightPhases,omitempty"`
+	Tags         []string `json:"tags,omitempty"`
+	BaseScore    int      `json:"baseScore"`
+	BaseLevel    string   `json:"baseLevel,omitempty"`
 }
 
 // AlertOptionsResponse گزینه‌های تنظیم اعلان (FIR و فرودگاه)
@@ -417,5 +425,12 @@ func notamToItem(n model.Notam) NotamItem {
 		LowerLimit:     n.LowerLimit,
 		UpperLimit:     n.UpperLimit,
 		CreatedAt:      n.CreatedAt,
+
+		QCode:        n.QCode,
+		Category:     n.Category,
+		FlightPhases: []string(n.FlightPhases),
+		Tags:         []string(n.Tags),
+		BaseScore:    n.BaseScore,
+		BaseLevel:    n.BaseLevel,
 	}
 }

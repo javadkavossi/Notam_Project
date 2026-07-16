@@ -11,6 +11,7 @@ import (
 	"github.com/hossein-repo/BaseProject/data/db"
 	"github.com/hossein-repo/BaseProject/data/db/model"
 	"github.com/hossein-repo/BaseProject/internal/messaging"
+	"github.com/hossein-repo/BaseProject/internal/pipeline/analysis"
 	"gorm.io/gorm"
 )
 
@@ -190,6 +191,9 @@ func (r *NotamRepository) eventToNotam(ev messaging.NotamEvent, notamMsg messagi
 		formatted = normalizeFormattedTextForCancel(formatted, seriesNum, ev, rawBody)
 	}
 
+	// تحلیل و امتیاز اهمیت پایه (E3) — قاعده‌محور و مستقل از پرواز
+	an := analysis.Analyze(ev)
+
 	return model.Notam{
 		MessageID:      notamMsg.ID(),
 		SeriesNumber:   seriesNum,
@@ -208,6 +212,16 @@ func (r *NotamRepository) eventToNotam(ev messaging.NotamEvent, notamMsg messagi
 		IssuedAt:       issuedAt,
 		FormattedText:  formatted,
 		RawBody:        rawBody,
+
+		QCode:        an.QCode,
+		QSubject:     an.Subject,
+		QCondition:   an.Condition,
+		Category:     an.Category,
+		FlightPhases: model.StringSlice(an.Phases),
+		Tags:         model.StringSlice(an.Tags),
+		BaseScore:    an.BaseScore,
+		BaseLevel:    an.BaseLevel,
+		WeightsVer:   analysis.WeightsVersion,
 	}
 }
 

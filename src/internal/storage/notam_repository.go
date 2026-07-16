@@ -176,10 +176,11 @@ func (r *NotamRepository) eventToNotam(ev messaging.NotamEvent, notamMsg messagi
 		}
 	}
 
-	// Q-line استاندارد ICAO (برای رویداد کنسل طبق استاندارد نمایش داده نمی‌شود)
+	// Q-line استاندارد ICAO از دادهٔ واقعی منبع ساخته می‌شود (برای رویداد کنسل نمایش داده نمی‌شود).
+	// هرگز Q-code جعلی نمی‌سازیم: اگر منبع selectionCode نداده باشد، بند Q حذف می‌شود.
 	qLine := ""
-	if eventType != "C" && ev.AffectedFIR != "" {
-		qLine = "Q) " + ev.AffectedFIR + "/QWMLW/IV/BO/W/000/999/"
+	if eventType != "C" {
+		qLine = buildQLine(ev)
 	}
 
 	// متن فرمت‌شده ICAO (برای خروجی Jeppesen)
@@ -434,6 +435,9 @@ func contains(s, sub string) bool {
 	return strings.Contains(strings.ToUpper(s), sub)
 }
 
+// buildQLine بند Q را از دادهٔ واقعی منبع می‌سازد (پیاده‌سازی مشترک در پکیج messaging).
+func buildQLine(ev messaging.NotamEvent) string { return messaging.QLine(ev) }
+
 // buildICAOFormattedText ساخت متن فرمت‌شده ICAO برای خروجی استاندارد خلبان
 func buildICAOFormattedText(ev messaging.NotamEvent, seriesNum, eventType, rawBody string) string {
 	var sb strings.Builder
@@ -463,9 +467,11 @@ func buildICAOFormattedText(ev messaging.NotamEvent, seriesNum, eventType, rawBo
 			sb.WriteString(fmt.Sprintf("%s NOTAMN\n", seriesNum))
 		}
 	}
-	// بند Q برای رویداد کنسل طبق استاندارد نمایش داده نمی‌شود
-	if eventType != "C" && ev.AffectedFIR != "" {
-		sb.WriteString("Q) " + ev.AffectedFIR + "/QWMLW/IV/BO/W/000/999/\n")
+	// بند Q فقط از دادهٔ واقعی؛ برای رویداد کنسل طبق استاندارد نمایش داده نمی‌شود
+	if eventType != "C" {
+		if q := buildQLine(ev); q != "" {
+			sb.WriteString(q + "\n")
+		}
 	}
 	loc := ev.ICAOLocation
 	if loc == "" {

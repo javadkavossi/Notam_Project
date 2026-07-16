@@ -96,9 +96,11 @@ func (a *Adapter) Start(ctx context.Context, emit ingest.EmitFunc) error {
 			solcfg.AuthenticationPropertySchemeBasicPassword: a.password,
 		}).
 		WithTransportSecurityStrategy(securityStrategy).
-		// اتصال مجدد خودکار برای همیشه؛ NOTAM از دست نمی‌رود چون صف durable است.
+		// اتصال مجدد پس از قطعیِ یک اتصالِ برقرارشده: برای همیشه (صف durable است، NOTAM گم نمی‌شود).
 		WithReconnectionRetryStrategy(solcfg.RetryStrategyForeverRetryWithInterval(reconnectInterval)).
-		WithConnectionRetryStrategy(solcfg.RetryStrategyForeverRetryWithInterval(reconnectInterval)).
+		// تلاش اولیه: بدون retry داخلی، تا Connect خطا را برگرداند و connectWithBackoff
+		// بتواند علت را لاگ کند. با retryِ داخلیِ بی‌نهایت، خطا هرگز دیده نمی‌شود.
+		WithConnectionRetryStrategy(solcfg.RetryStrategyNeverRetry()).
 		Build()
 	if err != nil {
 		return err

@@ -18,7 +18,11 @@ func InitDb(cfg *config.Config) error {
 		cfg.Postgres.Host, cfg.Postgres.Port, cfg.Postgres.User, cfg.Postgres.Password,
 		cfg.Postgres.DbName, cfg.Postgres.SSLMode)
 
-	dbClient, err = gorm.Open(postgres.Open(cnn), &gorm.Config{})
+	// FKها هنگام مهاجرت ساخته نمی‌شوند: دادهٔ مرجع/NOTAM از منابع بیرونی می‌آید و ممکن است
+	// به رکوردهایی اشاره کند که ما فیلترشان کرده‌ایم؛ FK کل بارگذاری را می‌شکند.
+	dbClient, err = gorm.Open(postgres.Open(cnn), &gorm.Config{
+		DisableForeignKeyConstraintWhenMigrating: true,
+	})
 	if err != nil {
 		return err
 	}

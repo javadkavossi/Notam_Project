@@ -20,7 +20,10 @@ func NewStore() *Store { return &Store{db: db.GetDb()} }
 const upsertBatch = 500
 
 // UpsertAirports فرودگاه‌ها را بر اساس ICAO درج/به‌روزرسانی می‌کند.
+// ورودی ابتدا بر اساس ICAO یکتا می‌شود: دادهٔ منبع کد تکراری دارد و Postgres در یک
+// دستور ON CONFLICT اجازهٔ اثر دوباره روی یک ردیف را نمی‌دهد (SQLSTATE 21000).
 func (s *Store) UpsertAirports(airports []model.Airport) error {
+	airports = dedupeAirports(airports)
 	if len(airports) == 0 {
 		return nil
 	}
@@ -28,6 +31,26 @@ func (s *Store) UpsertAirports(airports []model.Airport) error {
 		Columns:   []clause.Column{{Name: "icao"}},
 		DoUpdates: clause.AssignmentColumns([]string{"iata", "name", "country", "municipality", "type", "lat", "lon", "elevation_ft", "updated_at"}),
 	}).CreateInBatches(&airports, upsertBatch).Error
+}
+
+// dedupeAirports آخرین رکورد برای هر ICAO را نگه می‌دارد (ترتیب ورودی حفظ می‌شود).
+func dedupeAirports(in []model.Airport) []model.Airport {
+	seen := make(map[string]int, len(in))
+	out := make([]model.Airport, 0, len(in))
+	for _, a := range in {
+		key := strings.ToUpper(strings.TrimSpace(a.ICAO))
+		if key == "" {
+			continue
+		}
+		a.ICAO = key
+		if i, ok := seen[key]; ok {
+			out[i] = a // جایگزینی با آخرین رکورد
+			continue
+		}
+		seen[key] = len(out)
+		out = append(out, a)
+	}
+	return out
 }
 
 // ReplaceRunways باندهای یک مجموعه را به‌سادگی جایگزین می‌کند (حذف قبلی‌ها و درج).

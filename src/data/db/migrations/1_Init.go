@@ -26,6 +26,12 @@ func createTables(database *gorm.DB) {
 	// حذف FKهای قبلی - NOTAMها از فرودگاه‌های مختلف FAA می‌آیند، نیازی به FK نیست
 	_ = database.Exec("ALTER TABLE notams DROP CONSTRAINT IF EXISTS fk_notams_airport").Error
 	_ = database.Exec("ALTER TABLE notams DROP CONSTRAINT IF EXISTS fk_notams_runway").Error
+	// دادهٔ مرجع باندها ممکن است به فرودگاه‌هایی اشاره کند که ما فیلترشان کرده‌ایم (بدون ICAO معتبر)؛
+	// FK باعث شکست کل بارگذاری می‌شود.
+	_ = database.Exec("ALTER TABLE runways DROP CONSTRAINT IF EXISTS fk_airports_runways").Error
+	_ = database.Exec("ALTER TABLE notams DROP CONSTRAINT IF EXISTS fk_runways_notams").Error
+	// ستون قدیمیِ ساخته‌شده با نام پیش‌فرض GORM (پیش از تعیین نام صریح)
+	_ = database.Exec("ALTER TABLE firs DROP COLUMN IF EXISTS boundary_geo_json").Error
 
 	tables := []interface{}{
 		model.User{},

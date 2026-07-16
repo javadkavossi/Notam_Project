@@ -9,9 +9,12 @@ package model
 //     نیست تا اسکن geometry مشکل ایجاد نکند.
 type FIR struct {
 	BaseModel
-	ICAO           string `gorm:"size:4;uniqueIndex;not null"`
-	Name           string `gorm:"size:150"`
-	BoundaryGeoJSON string `gorm:"type:TEXT"`
+	// برخی منابع علاوه بر FIR چهارحرفی، شناسهٔ سکتور هم دارند (مثل "LFFF-AENB")
+	ICAO string `gorm:"size:16;uniqueIndex;not null"`
+	Name string `gorm:"size:150"`
+	// نام ستون صریح تعیین می‌شود؛ در غیر این صورت GORM آن را boundary_geo_json می‌نامد
+	// و کوئری‌های ON CONFLICT ما (که نام صریح دارند) می‌شکنند.
+	BoundaryGeoJSON string `gorm:"column:boundary_geojson;type:TEXT"`
 }
 
 func (FIR) TableName() string { return "firs" }

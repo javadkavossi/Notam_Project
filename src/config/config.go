@@ -153,8 +153,15 @@ func applyEnvOverrides(cfg *Config) {
 	cfg.Solace.Username = getEnv("SOLACE_USERNAME", cfg.Solace.Username) // بدون پیش‌فرض؛ فقط از env
 	cfg.Solace.Password = getEnv("SOLACE_PASSWORD", cfg.Solace.Password) // بدون پیش‌فرض؛ فقط از env
 
-	// ---- Postgres/Redis: اجازهٔ override رمز از env (تا رمز در فایل config نماند) ----
+	// ---- Postgres/Redis: override از env (رمز در فایل config نمی‌ماند؛ هاست/پورت برای
+	// اجرای ابزارها از بیرون کانتینر قابل تغییر است) ----
+	cfg.Postgres.Host = getEnv("POSTGRES_HOST", cfg.Postgres.Host)
+	cfg.Postgres.Port = getEnv("POSTGRES_PORT", cfg.Postgres.Port)
+	cfg.Postgres.User = getEnv("POSTGRES_USER", cfg.Postgres.User)
+	cfg.Postgres.DbName = getEnv("POSTGRES_DB", cfg.Postgres.DbName)
 	cfg.Postgres.Password = getEnv("POSTGRES_PASSWORD", cfg.Postgres.Password)
+	cfg.Redis.Host = getEnv("REDIS_HOST", cfg.Redis.Host)
+	cfg.Redis.Port = getEnv("REDIS_PORT", cfg.Redis.Port)
 	cfg.Redis.Password = getEnv("REDIS_PASSWORD", cfg.Redis.Password)
 
 	// ---- Auth موقت ----

@@ -21,6 +21,26 @@ func ParseNotamXML(payload string) (NotamEvent, error) {
 	return event, nil
 }
 
+// QLine بند Q استاندارد ICAO را فقط از دادهٔ واقعی منبع می‌سازد:
+//
+//	Q) FIR/Q-code/traffic/purpose/scope/lower/upper/
+//
+// اگر منبع Q-code (selectionCode) یا FIR نداده باشد، رشتهٔ خالی برمی‌گردد.
+//
+// ⚠️ هرگز مقدار جعلی جایگزین نمی‌شود: Q-code ساختگی یعنی نسبت‌دادن معنایی به NOTAM که
+// مرجع هوانوردی صادر نکرده است — در سامانهٔ safety-critical غیرقابل‌قبول.
+func QLine(ev NotamEvent) string {
+	code := strings.ToUpper(strings.TrimSpace(ev.QCode))
+	fir := strings.TrimSpace(ev.AffectedFIR)
+	if code == "" || fir == "" {
+		return ""
+	}
+	return fmt.Sprintf("Q) %s/%s/%s/%s/%s/%s/%s/",
+		fir, code,
+		strings.TrimSpace(ev.Traffic), strings.TrimSpace(ev.Purpose), strings.TrimSpace(ev.Scope),
+		strings.TrimSpace(ev.LowerLimit), strings.TrimSpace(ev.UpperLimit))
+}
+
 // EnsureHumanReadableText متن انسانی رویداد را تضمین می‌کند: اگر متن formatted موجود و کامل
 // نباشد (کمتر از ۳ خط)، متن استاندارد ICAO را از فیلدها می‌سازد.
 func EnsureHumanReadableText(event NotamEvent) string {
@@ -68,9 +88,13 @@ func BuildHumanReadableText(event NotamEvent) string {
 		sb.WriteString(fmt.Sprintf("%s NOTAM%s\n", currentNumber, event.EventType))
 	}
 
-	// بند Q برای NOTAMC طبق استاندارد نمایش داده نمی‌شود
-	if refType != "NOTAMC" && event.AffectedFIR != "" {
-		sb.WriteString("Q) " + event.AffectedFIR + "/QWMLW/IV/BO/W/000/999/\n")
+	// بند Q فقط از دادهٔ واقعی منبع؛ برای NOTAMC طبق استاندارد نمایش داده نمی‌شود.
+	// ⚠️ هرگز Q-code جعلی ساخته نمی‌شود (قبلاً مقدار ثابت QWMLW درج می‌شد که یعنی
+	// «شلیک موشک/توپ» و باعث دسته‌بندی خطرناکِ اشتباه می‌شد).
+	if refType != "NOTAMC" {
+		if q := QLine(event); q != "" {
+			sb.WriteString(q + "\n")
+		}
 	}
 
 	aLine := event.ICAOLocation

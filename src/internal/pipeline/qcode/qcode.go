@@ -14,10 +14,14 @@ import (
 
 // دسته‌های اصلی (Category) که موضوع Q-code به آن نگاشت می‌شود.
 const (
-	CatAerodrome   = "AERODROME"
-	CatRunway      = "RUNWAY"
-	CatTaxiway     = "TAXIWAY"
-	CatApron       = "APRON"
+	CatAerodrome = "AERODROME"
+	CatRunway    = "RUNWAY"
+	CatTaxiway   = "TAXIWAY"
+	CatApron     = "APRON"
+	// CatMovementArea برای کدهای گروه M که موضوع دقیقشان شناخته نشده.
+	// عمداً از RUNWAY جدا است: نسبت‌دادن «باند» به یک کد ناشناخته باعث تشدید
+	// خطرناکِ اهمیت می‌شود (مثلاً بستن تاکسی‌وی → «باند بسته»).
+	CatMovementArea = "MOVEMENT_AREA"
 	CatLighting    = "LIGHTING"
 	CatILS         = "ILS"
 	CatNavigation  = "NAVIGATION"
@@ -49,17 +53,27 @@ type subjectInfo struct {
 
 // subjectMap موضوع (۲ حرف) → دسته + برچسب. زیرمجموعه‌ای نمایندهٔ جدول ICAO.
 var subjectMap = map[string]subjectInfo{
-	// Movement area (M) — سطح حرکت و فرود
+	// Movement area (M) — سطح حرکت و فرود.
+	// ⚠️ دقت در تفکیک باند/تاکسی‌وی حیاتی است: نسبت‌دادن اشتباهِ «باند» به تاکسی‌وی
+	// اهمیت را به‌غلط تا سطح بحرانی بالا می‌برد.
 	"MR": {CatRunway, "Runway"},
 	"MS": {CatRunway, "Stopway"},
 	"MT": {CatRunway, "Threshold"},
 	"MU": {CatRunway, "Runway turning bay"},
 	"MW": {CatRunway, "Strip/shoulder"},
 	"MD": {CatRunway, "Declared distances"},
+	"MH": {CatRunway, "Runway arresting gear"},
 	"MX": {CatTaxiway, "Taxiway(s)"},
+	"MY": {CatTaxiway, "Rapid exit taxiway"},
+	"MG": {CatTaxiway, "Taxiing guidance system"},
 	"MK": {CatApron, "Parking area"},
 	"MN": {CatApron, "Apron"},
 	"MP": {CatApron, "Aircraft stands"},
+	"MO": {CatMovementArea, "Stopbar"},
+	"MA": {CatMovementArea, "Movement area"},
+	"MB": {CatMovementArea, "Bearing strength"},
+	"MC": {CatMovementArea, "Clearway"},
+	"MM": {CatMovementArea, "Daylight markings"},
 	// Facilities (F)
 	"FA": {CatAerodrome, "Aerodrome"},
 	"FF": {CatAerodrome, "Fire and rescue"},
@@ -144,8 +158,10 @@ var subjectMap = map[string]subjectInfo{
 }
 
 // subjectByFirstLetter نگاشت خشن بر اساس حرف اول موضوع، برای کدهای ناشناخته (fallback).
+// اصل: fallback هرگز نباید به پرخطرترین دستهٔ گروه نگاشت شود؛ در تردید، دستهٔ خنثی‌تر
+// انتخاب می‌شود تا اهمیت به‌غلط تشدید نشود (Recognized=false هم ثبت می‌شود).
 var subjectByFirstLetter = map[byte]subjectInfo{
-	'M': {CatRunway, "Movement area"},
+	'M': {CatMovementArea, "Movement area"},
 	'F': {CatAerodrome, "Facility/service"},
 	'L': {CatLighting, "Lighting facility"},
 	'I': {CatILS, "ILS/MLS"},

@@ -3,6 +3,7 @@ package reference
 import (
 	"bytes"
 	"os"
+	"strings"
 
 	"github.com/hossein-repo/BaseProject/data/db/model"
 	"github.com/hossein-repo/BaseProject/internal/reference/etl"
@@ -26,6 +27,7 @@ func (s *Store) LoadFIRs(path string) (LoadResult, error) {
 }
 
 func (s *Store) upsertFIRs(firs []model.FIR) error {
+	firs = dedupeFIRs(firs)
 	if len(firs) == 0 {
 		return nil
 	}
@@ -47,6 +49,26 @@ func (s *Store) upsertFIRs(firs []model.FIR) error {
 		}
 		return nil
 	})
+}
+
+// dedupeFIRs آخرین رکورد برای هر ICAO را نگه می‌دارد (منبع ممکن است شناسهٔ تکراری داشته باشد).
+func dedupeFIRs(in []model.FIR) []model.FIR {
+	seen := make(map[string]int, len(in))
+	out := make([]model.FIR, 0, len(in))
+	for _, f := range in {
+		key := strings.ToUpper(strings.TrimSpace(f.ICAO))
+		if key == "" {
+			continue
+		}
+		f.ICAO = key
+		if i, ok := seen[key]; ok {
+			out[i] = f
+			continue
+		}
+		seen[key] = len(out)
+		out = append(out, f)
+	}
+	return out
 }
 
 // LoadReferenceData همهٔ دیتاست‌های مرجع را از مسیرهای داده‌شده بارگذاری می‌کند (مسیر خالی = رد شود).

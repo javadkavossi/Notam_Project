@@ -11,9 +11,10 @@ type Runway struct {
 
 	LengthFt int
 	WidthFt  int
-	Surface  string `gorm:"size:40"`
-	Lighted  bool
-	Closed   bool
+	// دادهٔ منبع جمع‌سپاری‌شده است و گاهی به‌جای کد سطح، توضیح آزاد دارد → TEXT
+	Surface string `gorm:"type:TEXT"`
+	Lighted bool
+	Closed  bool
 
 	Notams []Notam `gorm:"foreignKey:RunwayID"`
 }

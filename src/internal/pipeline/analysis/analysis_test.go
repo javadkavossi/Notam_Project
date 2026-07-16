@@ -101,6 +101,45 @@ func TestGoldenAnalyze(t *testing.T) {
 	}
 }
 
+// حفاظ ایمنی (رگرسیون از دادهٔ واقعی): «rapid exit taxiway» نباید «باند» شود.
+// قبلاً QMYLC به‌دلیل نبودِ MY در جدول، با fallback حرف اول به RUNWAY می‌رفت و با
+// برچسب RWY_CLOSED امتیاز ۱۰۰/CRITICAL می‌گرفت — یعنی بستنِ تاکسی‌وی به‌عنوان
+// بستنِ باند به خلبان گزارش می‌شد.
+func TestRapidExitTaxiwayNotClassifiedAsRunway(t *testing.T) {
+	got := Analyze(messaging.NotamEvent{QCode: "QMYLC", Text: "RAPID EXIT TWY N5 CLOSED"})
+
+	if got.Category == qcode.CatRunway {
+		t.Errorf("QMYLC (rapid exit taxiway) نباید RUNWAY شود")
+	}
+	if got.Category != qcode.CatTaxiway {
+		t.Errorf("category=%q، انتظار TAXIWAY", got.Category)
+	}
+	if hasTag(got.Tags, TagRwyClosed) {
+		t.Errorf("برچسب RWY_CLOSED نباید برای تاکسی‌وی صادر شود؛ tags=%v", got.Tags)
+	}
+	if got.BaseLevel == LevelCritical {
+		t.Errorf("بستن تاکسی‌وی نباید بحرانی باشد (score=%d)", got.BaseScore)
+	}
+}
+
+// موضوع ناشناختهٔ گروه M نباید به RUNWAY (پرخطرترین دستهٔ گروه) نگاشت شود و
+// نباید برچسب قاطع بگیرد.
+func TestUnknownSubjectDoesNotEscalate(t *testing.T) {
+	got := Analyze(messaging.NotamEvent{QCode: "QMZLC", Text: "SOMETHING CLOSED"})
+
+	if got.Category == qcode.CatRunway {
+		t.Errorf("موضوع ناشناختهٔ MZ نباید RUNWAY شود")
+	}
+	if hasTag(got.Tags, TagRwyClosed) {
+		t.Errorf("موضوع حدس‌زده‌شده نباید برچسب RWY_CLOSED بگیرد؛ tags=%v", got.Tags)
+	}
+	// باید همچنان از باندِ بسته کم‌اهمیت‌تر باشد
+	rwy := Analyze(messaging.NotamEvent{QCode: "QMRLC", Text: "RWY CLSD"}).BaseScore
+	if got.BaseScore >= rwy {
+		t.Errorf("ناشناخته (%d) نباید ≥ باند بسته (%d) باشد", got.BaseScore, rwy)
+	}
+}
+
 func TestScoreOrdering(t *testing.T) {
 	// باند بسته باید مهم‌تر از تاکسی‌وی بسته باشد؛ هر دو از NOTAM لغوشده مهم‌تر
 	rwy := Analyze(messaging.NotamEvent{QCode: "QMRLC", Text: "RWY CLSD"}).BaseScore

@@ -16,14 +16,18 @@ func TestBuildHumanReadableText_New(t *testing.T) {
 		EffectiveStart: "2026021506",
 		EffectiveEnd:   "2026021523",
 		Text:           "RWY 11L/29R CLSD DUE WIP",
+		QCode:          "QMRLC",
+		Traffic:        "IV",
+		Purpose:        "NBO",
+		Scope:          "A",
 	}
 	got := BuildHumanReadableText(ev)
 
 	wantContains := []string{
-		"A0046/26 NOTAMN",             // خط اول: سریال + نوع
-		"Q) OIIX/QWMLW/IV/BO/W/000/999/", // بند Q
-		"A) OIII",                     // مکان
-		"B) 26021506",                 // پیشوند قرن حذف شده
+		"A0046/26 NOTAMN",              // خط اول: سریال + نوع
+		"Q) OIIX/QMRLC/IV/NBO/A///",    // بند Q از دادهٔ واقعی منبع
+		"A) OIII",                      // مکان
+		"B) 26021506",                  // پیشوند قرن حذف شده
 		"C) 26021523",
 		"E) RWY 11L/29R CLSD DUE WIP", // متن اصلی
 	}
@@ -31,6 +35,59 @@ func TestBuildHumanReadableText_New(t *testing.T) {
 		if !strings.Contains(got, w) {
 			t.Errorf("خروجی شامل %q نیست.\n--- got ---\n%s", w, got)
 		}
+	}
+}
+
+// حفاظ رگرسیون: وقتی منبع Q-code نداده، هرگز نباید Q-code ساختگی تولید شود.
+// قبلاً مقدار ثابت QWMLW (یعنی «شلیک موشک/توپ») درج می‌شد و باعث دسته‌بندی خطرناکِ اشتباه شد.
+func TestBuildHumanReadableText_NoFabricatedQCode(t *testing.T) {
+	ev := NotamEvent{
+		Series: "A", Number: 46, Year: "2026", EventType: "N",
+		AffectedFIR: "OIIX", ICAOLocation: "OIII",
+		Text: "RWY 11L/29R CLSD DUE WIP",
+		// QCode عمداً خالی است (فید واقعی همیشه selectionCode ندارد)
+	}
+	got := BuildHumanReadableText(ev)
+
+	if strings.Contains(got, "QWMLW") {
+		t.Errorf("Q-code جعلی QWMLW تولید شد:\n%s", got)
+	}
+	if strings.Contains(got, "Q)") {
+		t.Errorf("بدون Q-codeِ منبع نباید بند Q ساخته شود:\n%s", got)
+	}
+}
+
+func TestQLine(t *testing.T) {
+	// با دادهٔ کامل
+	got := QLine(NotamEvent{AffectedFIR: "LTAA", QCode: "QMRLC", Traffic: "IV", Purpose: "NBO", Scope: "A"})
+	if got != "Q) LTAA/QMRLC/IV/NBO/A///" {
+		t.Errorf("بند Q نادرست: %q", got)
+	}
+	// بدون Q-code → خالی
+	if q := QLine(NotamEvent{AffectedFIR: "LTAA"}); q != "" {
+		t.Errorf("بدون Q-code باید خالی باشد، دریافت %q", q)
+	}
+	// بدون FIR → خالی
+	if q := QLine(NotamEvent{QCode: "QMRLC"}); q != "" {
+		t.Errorf("بدون FIR باید خالی باشد، دریافت %q", q)
+	}
+}
+
+func TestParseNotamXML_SelectionCodeIsQCode(t *testing.T) {
+	// فید واقعی FAA Q-code را در selectionCode می‌دهد (نه در تگ qcode)
+	payload := `<root><hasMember><Event><timeSlice><EventTimeSlice><textNOTAM><NOTAM>
+		<selectionCode>QMRLC</selectionCode><traffic>IV</traffic><purpose>NBO</purpose><scope>A</scope>
+		<text>RWY 18L/36R CLSD</text>
+	</NOTAM></textNOTAM></EventTimeSlice></timeSlice></Event></hasMember></root>`
+	ev, err := ParseNotamXML(payload)
+	if err != nil {
+		t.Fatalf("ParseNotamXML: %v", err)
+	}
+	if ev.QCode != "QMRLC" {
+		t.Errorf("QCode باید از selectionCode خوانده شود، دریافت %q", ev.QCode)
+	}
+	if ev.Traffic != "IV" || ev.Purpose != "NBO" || ev.Scope != "A" {
+		t.Errorf("فیلدهای بند Q نادرست: %+v", ev)
 	}
 }
 

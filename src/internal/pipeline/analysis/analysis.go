@@ -68,8 +68,9 @@ var categoryBase = map[string]int{
 	qcode.CatGNSS:        50,
 	qcode.CatNavigation:  45,
 	qcode.CatLighting:    40,
-	qcode.CatTaxiway:     38,
-	qcode.CatApron:       25,
+	qcode.CatTaxiway:      38,
+	qcode.CatMovementArea: 35, // موضوع دقیق ناشناخته در گروه M — عمداً پایین‌تر از باند
+	qcode.CatApron:        25,
 	qcode.CatAirspace:    55,
 	qcode.CatRestriction: 55,
 	qcode.CatProcedure:   50,
@@ -117,8 +118,9 @@ var conditionDelta = map[string]int{
 // نگاشت دسته → فازهای پرواز مرتبط.
 var categoryPhases = map[string][]string{
 	qcode.CatAerodrome:   {PhaseDeparture, PhaseLanding, PhaseGround},
-	qcode.CatRunway:      {PhaseDeparture, PhaseLanding},
-	qcode.CatTaxiway:     {PhaseGround},
+	qcode.CatRunway:       {PhaseDeparture, PhaseLanding},
+	qcode.CatTaxiway:      {PhaseGround},
+	qcode.CatMovementArea: {PhaseGround},
 	qcode.CatApron:       {PhaseGround},
 	qcode.CatLighting:    {PhaseApproach, PhaseLanding},
 	qcode.CatILS:         {PhaseApproach, PhaseLanding},
@@ -156,7 +158,9 @@ func Analyze(ev messaging.NotamEvent) Result {
 		score += delta
 	}
 
-	res.Tags = deriveTags(d.Category, d.Condition, ev.Text+" "+ev.HumanReadableText)
+	// برچسب‌های وابسته به دسته فقط وقتی صادر می‌شوند که موضوع Q-code دقیقاً شناسایی شده باشد.
+	// اگر موضوع حدس زده شده (fallback حرف اول)، برچسبِ قاطع مثل RWY_CLOSED گمراه‌کننده است.
+	res.Tags = deriveTags(d.Category, d.Condition, ev.Text+" "+ev.HumanReadableText, d.Recognized)
 	score += tagBonus(res.Tags)
 
 	res.BaseScore = clamp(score)
@@ -196,20 +200,29 @@ func analyzeFromText(ev messaging.NotamEvent) Result {
 	}
 
 	res.Phases = categoryPhases[res.Category]
-	res.Tags = deriveTags(res.Category, "", text)
+	// در این مسیر دسته مستقیماً از کلیدواژه‌های متن آمده (نه حدسِ Q-code)، پس برچسب‌ها معتبرند.
+	res.Tags = deriveTags(res.Category, "", text, true)
 	res.BaseScore = clamp(res.BaseScore + tagBonus(res.Tags))
 	res.BaseLevel = level(res.BaseScore)
 	return res
 }
 
-func deriveTags(category, condition, text string) []string {
+// deriveTags برچسب‌های بحرانی را استخراج می‌کند.
+// subjectKnown: آیا موضوع Q-code دقیقاً شناسایی شده؟ اگر نه، برچسب‌های وابسته به دسته
+// صادر نمی‌شوند (فقط برچسب‌های متن‌محور مثل FICON که مستقل از Q-code قابل اتکا هستند).
+func deriveTags(category, condition, text string, subjectKnown bool) []string {
 	up := strings.ToUpper(text)
 	var tags []string
 	closed := condition == "LC" || strings.Contains(up, "CLSD") || strings.Contains(up, "CLOSED")
 
+	// متن‌محور: مستقل از شناسایی Q-code معتبر است
 	if strings.Contains(up, "FICON") {
 		tags = append(tags, TagFICON)
 	}
+	if !subjectKnown {
+		return tags
+	}
+
 	if category == qcode.CatRunway && closed {
 		tags = append(tags, TagRwyClosed)
 	}

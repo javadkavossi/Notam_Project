@@ -19,13 +19,25 @@ func TestDecodeRecognized(t *testing.T) {
 }
 
 func TestDecodeFallbackByFirstLetter(t *testing.T) {
-	// QM?? با موضوع ناشناختهٔ MZ → fallback به حرف M (movement area → RUNWAY)
+	// موضوع ناشناختهٔ MZ → fallback به گروه M.
+	// باید به دستهٔ خنثای MOVEMENT_AREA برود، نه RUNWAY: نگاشتِ حدسی به پرخطرترین
+	// دستهٔ گروه، اهمیت را به‌غلط تا سطح بحرانی تشدید می‌کند.
 	d := Decode("QMZLC")
 	if d.Recognized {
 		t.Error("MZ نباید کاملاً شناسایی شود")
 	}
-	if d.Category != CatRunway {
-		t.Errorf("fallback category=%q، انتظار RUNWAY", d.Category)
+	if d.Category == CatRunway {
+		t.Error("fallback نباید به RUNWAY تشدید شود")
+	}
+	if d.Category != CatMovementArea {
+		t.Errorf("fallback category=%q، انتظار MOVEMENT_AREA", d.Category)
+	}
+}
+
+func TestDecodeRapidExitTaxiway(t *testing.T) {
+	d := Decode("QMYLC")
+	if !d.Recognized || d.Category != CatTaxiway {
+		t.Errorf("QMYLC باید تاکسی‌وی شناسایی شود: %+v", d)
 	}
 }
 

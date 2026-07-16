@@ -14,6 +14,7 @@ import (
 	"github.com/hossein-repo/BaseProject/internal/ingest"
 	solaceadapter "github.com/hossein-repo/BaseProject/internal/ingest/solace"
 	"github.com/hossein-repo/BaseProject/internal/pipeline"
+	"github.com/hossein-repo/BaseProject/internal/reference"
 	"github.com/hossein-repo/BaseProject/internal/storage"
 	"github.com/hossein-repo/BaseProject/pkg/logging"
 )
@@ -43,6 +44,18 @@ func main() {
 	} else {
 		logger.Info(logging.General, logging.Startup, "AUTH_PASS تنظیم نشده؛ کاربر ادمین اولیه ساخته نشد", nil)
 	}
+
+	// بارگذاری دادهٔ مرجع (فرودگاه/باند/ناوید/FIR) در صورت تنظیم مسیرها (E7؛ غیرمسدودکننده).
+	// فقط دیتاست‌های تغییرکرده (checksum) اعمال می‌شوند.
+	go func() {
+		results := reference.NewStore().LoadReferenceData(
+			os.Getenv("REF_AIRPORTS_PATH"), os.Getenv("REF_RUNWAYS_PATH"),
+			os.Getenv("REF_NAVAIDS_PATH"), os.Getenv("REF_FIRS_PATH"))
+		for _, r := range results {
+			logger.Info(logging.General, logging.Startup,
+				"reference loaded: "+r.Dataset, map[logging.ExtraKey]interface{}{"rows": r.RowCount, "changed": r.Changed})
+		}
+	}()
 
 	repo := storage.NewNotamRepository()
 

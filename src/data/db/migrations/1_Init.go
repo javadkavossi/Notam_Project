@@ -31,6 +31,9 @@ func createTables(database *gorm.DB) {
 		model.User{},
 		model.Airport{},
 		model.Runway{},
+		model.Navaid{},
+		model.FIR{},
+		model.RefDatasetVersion{},
 		model.Notam{},
 		model.NotamAlertSettings{},
 		model.NotamAlertDelivery{},
@@ -40,4 +43,26 @@ func createTables(database *gorm.DB) {
 	} else {
 		logger.Info(logging.Postgres, logging.Migration, "NOTAM tables migrated", nil)
 	}
+
+	addSpatialColumns(database)
+}
+
+// addSpatialColumns ستون‌های geometry (PostGIS) و ایندکس GiST را اضافه می‌کند (E7).
+// اگر PostGIS نصب نباشد، فقط لاگ می‌شود و بقیهٔ سیستم کار می‌کند.
+func addSpatialColumns(database *gorm.DB) {
+	stmts := []string{
+		// مرز FIR برای تطبیق enroute
+		`ALTER TABLE firs ADD COLUMN IF NOT EXISTS boundary geometry(Geometry,4326)`,
+		`CREATE INDEX IF NOT EXISTS idx_firs_boundary ON firs USING GIST (boundary)`,
+		// محدودهٔ NOTAM (نقطه/دایره) برای تطبیق جغرافیایی
+		`ALTER TABLE notams ADD COLUMN IF NOT EXISTS area geometry(Geometry,4326)`,
+		`CREATE INDEX IF NOT EXISTS idx_notams_area ON notams USING GIST (area)`,
+	}
+	for _, s := range stmts {
+		if err := database.Exec(s).Error; err != nil {
+			logger.Error(logging.Postgres, logging.Migration, "spatial column/index skipped: "+err.Error(), nil)
+			return // احتمالاً PostGIS نصب نیست؛ ادامه نده
+		}
+	}
+	logger.Info(logging.Postgres, logging.Migration, "PostGIS spatial columns ready", nil)
 }

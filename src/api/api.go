@@ -38,6 +38,8 @@ func registerRoutes(r *gin.Engine, cfg *config.Config) {
 		routers.Auth(auth, cfg)
 		notams := v1.Group("/notams")
 		routers.Notam(notams, cfg)
+		ref := v1.Group("/reference")
+		routers.Reference(ref)
 	}
 }
 

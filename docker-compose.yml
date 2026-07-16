@@ -14,6 +14,8 @@ services:
       - TZ=Asia/Tehran
       - AUTH_USER=${AUTH_USER:-admin}
       - AUTH_PASS=${AUTH_PASS:?set AUTH_PASS in .env}
+      - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET in .env}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-}
       - SOLACE_HOST=${SOLACE_HOST:-tcps://ems2.swim.faa.gov:55443}
       - SOLACE_VPN=${SOLACE_VPN:-AIM_FNS}
       - SOLACE_USERNAME=${SOLACE_USERNAME:?set SOLACE_USERNAME in .env}

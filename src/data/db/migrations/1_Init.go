@@ -28,6 +28,7 @@ func createTables(database *gorm.DB) {
 	_ = database.Exec("ALTER TABLE notams DROP CONSTRAINT IF EXISTS fk_notams_runway").Error
 
 	tables := []interface{}{
+		model.User{},
 		model.Airport{},
 		model.Runway{},
 		model.Notam{},

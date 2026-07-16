@@ -9,6 +9,7 @@ import (
 	"github.com/hossein-repo/BaseProject/data/cache"
 	"github.com/hossein-repo/BaseProject/data/db"
 	"github.com/hossein-repo/BaseProject/data/db/migrations"
+	"github.com/hossein-repo/BaseProject/data/db/model"
 	"github.com/hossein-repo/BaseProject/data/stream"
 	"github.com/hossein-repo/BaseProject/internal/ingest"
 	solaceadapter "github.com/hossein-repo/BaseProject/internal/ingest/solace"
@@ -33,6 +34,15 @@ func main() {
 	}
 	defer db.CloseDb()
 	migrations.Up_1()
+
+	// seed کاربر ادمین اولیه از env (E0-3). اگر از قبل باشد دست نمی‌خورد.
+	if cfg.Auth.Pass != "" {
+		if err := storage.NewUserRepository().EnsureUser(cfg.Auth.User, cfg.Auth.Pass, model.RoleAdmin); err != nil {
+			logger.Error(logging.Postgres, logging.Startup, "seed admin user failed: "+err.Error(), nil)
+		}
+	} else {
+		logger.Info(logging.General, logging.Startup, "AUTH_PASS تنظیم نشده؛ کاربر ادمین اولیه ساخته نشد", nil)
+	}
 
 	repo := storage.NewNotamRepository()
 

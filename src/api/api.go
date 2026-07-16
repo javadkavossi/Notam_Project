@@ -35,9 +35,9 @@ func registerRoutes(r *gin.Engine, cfg *config.Config) {
 		health := v1.Group("/health")
 		routers.Health(health)
 		auth := v1.Group("/auth")
-		routers.Auth(auth)
+		routers.Auth(auth, cfg)
 		notams := v1.Group("/notams")
-		routers.Notam(notams)
+		routers.Notam(notams, cfg)
 	}
 }
 

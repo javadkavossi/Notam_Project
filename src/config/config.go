@@ -161,9 +161,22 @@ func applyEnvOverrides(cfg *Config) {
 	cfg.Auth.User = getEnv("AUTH_USER", firstNonEmpty(cfg.Auth.User, "admin"))
 	cfg.Auth.Pass = getEnv("AUTH_PASS", cfg.Auth.Pass) // بدون پیش‌فرض محرمانه
 
-	// ---- JWT secret از env ----
+	// ---- JWT: secret از env + پیش‌فرض‌های امن برای مدت انقضا ----
 	cfg.JWT.Secret = getEnv("JWT_SECRET", cfg.JWT.Secret)
 	cfg.JWT.RefreshSecret = getEnv("JWT_REFRESH_SECRET", cfg.JWT.RefreshSecret)
+	if cfg.JWT.Secret == "" {
+		cfg.JWT.Secret = "dev-insecure-jwt-secret-change-me"
+		log.Println("⚠️ JWT_SECRET تنظیم نشده؛ از secret ناامنِ توسعه استفاده می‌شود. در production حتماً تنظیم کنید.")
+	}
+	if cfg.JWT.RefreshSecret == "" {
+		cfg.JWT.RefreshSecret = cfg.JWT.Secret + "-refresh"
+	}
+	if cfg.JWT.AccessTokenExpireDuration == 0 {
+		cfg.JWT.AccessTokenExpireDuration = 24 * time.Hour
+	}
+	if cfg.JWT.RefreshTokenExpireDuration == 0 {
+		cfg.JWT.RefreshTokenExpireDuration = 7 * 24 * time.Hour
+	}
 }
 
 func getEnv(key, fallback string) string {

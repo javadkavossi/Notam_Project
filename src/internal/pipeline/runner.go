@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/hossein-repo/BaseProject/data/stream"
+	"github.com/hossein-repo/BaseProject/internal/ingest"
 	"github.com/hossein-repo/BaseProject/internal/messaging"
 )
 
@@ -80,23 +81,34 @@ func (r *Runner) Run(ctx context.Context) error {
 }
 
 // handleBatch یک دسته پیام را پردازش، ذخیره و ack می‌کند.
-// XACK فقط پس از پردازش موفق زده می‌شود؛ در صورت خطای پارس، پیام ack نمی‌شود تا بعداً به DLQ برود (E2-6).
+// در صورت خطای پارس، پیام به DLQ منتقل و سپس ack می‌شود تا پیامِ خرابْ حلقهٔ بی‌پایان نسازد (E2-6).
 func (r *Runner) handleBatch(msgs []stream.Message) {
 	for _, m := range msgs {
 		raw := RawFromValues(m.Values)
 		res, err := r.proc.Process(raw)
 		if err != nil {
-			// شکست پارس: عمداً ack نمی‌کنیم تا پیام گم نشود (DLQ در E2-6 اضافه می‌شود).
-			log.Printf("❌ Process failed (not acked) id=%s src=%s: %v", m.ID, raw.Source, err)
-			continue
-		}
-		if !res.Skip {
+			// شکست پارس: به DLQ منتقل کن (گم نمی‌شود) و سپس ack کن تا poison-loop رخ ندهد.
+			if !r.toDLQ(raw, err, m.ID) {
+				// اگر نوشتن در DLQ هم شکست خورد، ack نکن تا پیام حفظ شود و بعداً دوباره تلاش شود.
+				continue
+			}
+		} else if !res.Skip {
 			// ذخیرهٔ idempotent (canonical_key). Save داخلی خطا را لاگ می‌کند.
 			r.repo.Save(res.Message)
 		}
-		// پیام پردازش شد (ذخیره یا skip آگاهانه) → ack
+		// پیام پردازش شد (ذخیره / skip آگاهانه / منتقل به DLQ) → ack
 		if err := r.stream.Ack(StreamNotamRaw, GroupPipeline, m.ID); err != nil {
 			log.Printf("⚠️ XACK failed for %s: %v", m.ID, err)
 		}
 	}
+}
+
+// toDLQ پیام شکست‌خورده را در استریم DLQ می‌نویسد. در صورت موفقیت true برمی‌گرداند.
+func (r *Runner) toDLQ(raw ingest.RawNotamMessage, procErr error, streamID string) bool {
+	if _, err := r.stream.Publish(StreamNotamDLQ, DLQValues(raw, procErr.Error()), 50000); err != nil {
+		log.Printf("❌ DLQ publish failed for %s (kept for retry): %v", streamID, err)
+		return false
+	}
+	log.Printf("📥 Moved to DLQ id=%s src=%s: %v", streamID, raw.Source, procErr)
+	return true
 }

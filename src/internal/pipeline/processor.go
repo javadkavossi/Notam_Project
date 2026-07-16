@@ -6,6 +6,7 @@ package pipeline
 
 import (
 	"strings"
+	"time"
 
 	"github.com/hossein-repo/BaseProject/internal/ingest"
 	"github.com/hossein-repo/BaseProject/internal/messaging"
@@ -14,6 +15,7 @@ import (
 // نام‌های استریم و گروه مصرف‌کننده.
 const (
 	StreamNotamRaw = "notam:raw"
+	StreamNotamDLQ = "notam:dlq" // پیام‌هایی که پردازش (parse) نشدند — هرگز دور ریخته نمی‌شوند (E2-6)
 	GroupPipeline  = "pipeline"
 )
 
@@ -23,6 +25,8 @@ const (
 	fieldSourceMsgID = "source_msg_id"
 	fieldPayload     = "payload"
 	fieldReceivedAt  = "received_at"
+	fieldError       = "error"     // فقط در DLQ
+	fieldFailedAt    = "failed_at" // فقط در DLQ
 )
 
 // ProcessResult نتیجهٔ پردازش یک پیام خام.
@@ -89,5 +93,16 @@ func RawFromValues(values map[string]string) ingest.RawNotamMessage {
 		Source:          values[fieldSource],
 		SourceMessageID: values[fieldSourceMsgID],
 		Payload:         values[fieldPayload],
+	}
+}
+
+// DLQValues فیلدهای یک پیام شکست‌خورده را برای نوشتن در DLQ آماده می‌کند (E2-6).
+func DLQValues(raw ingest.RawNotamMessage, errMsg string) map[string]interface{} {
+	return map[string]interface{}{
+		fieldSource:      raw.Source,
+		fieldSourceMsgID: raw.SourceMessageID,
+		fieldPayload:     raw.Payload,
+		fieldError:       errMsg,
+		fieldFailedAt:    time.Now().UTC().Format("2006-01-02T15:04:05Z07:00"),
 	}
 }

@@ -8,6 +8,7 @@ package solace
 import (
 	"context"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/hossein-repo/BaseProject/internal/ingest"
@@ -21,6 +22,11 @@ import (
 
 const SourceName = "FAA_SWIM"
 
+const (
+	reconnectInterval = 5 * time.Second  // فاصلهٔ تلاش مجدد اتصال/اتصال مجدد
+	startupBackoffMax = 60 * time.Second // سقف backoff تلاش اولیه
+)
+
 // Adapter آداپتور Solace.
 type Adapter struct {
 	host     string
@@ -31,16 +37,53 @@ type Adapter struct {
 
 	service  sol.MessagingService
 	receiver sol.PersistentMessageReceiver
+
+	outage ingest.OutageSink
+
+	mu       sync.Mutex
+	downSince time.Time // زمان شروع قطعی جاری (صفر یعنی متصل)
 }
 
 // New یک آداپتور Solace می‌سازد.
 func New(host, vpn, username, password, queue string) *Adapter {
-	return &Adapter{host: host, vpn: vpn, username: username, password: password, queue: queue}
+	return &Adapter{host: host, vpn: vpn, username: username, password: password, queue: queue,
+		outage: ingest.LogOutageSink{}}
+}
+
+// WithOutageSink ثبت‌کنندهٔ بازهٔ قطعی را جایگزین می‌کند (پیش‌فرض: لاگ).
+func (a *Adapter) WithOutageSink(s ingest.OutageSink) *Adapter {
+	if s != nil {
+		a.outage = s
+	}
+	return a
 }
 
 func (a *Adapter) Name() string { return SourceName }
 
+// markDown شروع یک بازهٔ قطعی را ثبت می‌کند (اگر قبلاً ثبت نشده باشد).
+func (a *Adapter) markDown(t time.Time) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.downSince.IsZero() {
+		a.downSince = t
+		log.Printf("🔌 Solace connection lost at %s; reconnecting…", t.UTC().Format(time.RFC3339))
+	}
+}
+
+// markUp پایان بازهٔ قطعی را ثبت و بازه را به OutageSink تحویل می‌دهد.
+func (a *Adapter) markUp(t time.Time) {
+	a.mu.Lock()
+	start := a.downSince
+	a.downSince = time.Time{}
+	a.mu.Unlock()
+	if !start.IsZero() {
+		log.Printf("🔌 Solace reconnected at %s", t.UTC().Format(time.RFC3339))
+		a.outage.RecordOutage(SourceName, start, t)
+	}
+}
+
 // Start به Solace وصل می‌شود و پیام‌ها را با client-ack دریافت و emit می‌کند.
+// در برابر قطعی مقاوم است: تلاش اولیه با backoff، و اتصال مجدد خودکار با ثبت بازهٔ قطعی (E1-3).
 func (a *Adapter) Start(ctx context.Context, emit ingest.EmitFunc) error {
 	// روی محیط بدون گواهی معتبر، اعتبارسنجی TLS غیرفعال می‌شود (مطابق رفتار قبلی).
 	securityStrategy := solcfg.NewTransportSecurityStrategy().WithoutCertificateValidation()
@@ -53,14 +96,30 @@ func (a *Adapter) Start(ctx context.Context, emit ingest.EmitFunc) error {
 			solcfg.AuthenticationPropertySchemeBasicPassword: a.password,
 		}).
 		WithTransportSecurityStrategy(securityStrategy).
+		// اتصال مجدد خودکار برای همیشه؛ NOTAM از دست نمی‌رود چون صف durable است.
+		WithReconnectionRetryStrategy(solcfg.RetryStrategyForeverRetryWithInterval(reconnectInterval)).
+		WithConnectionRetryStrategy(solcfg.RetryStrategyForeverRetryWithInterval(reconnectInterval)).
 		Build()
 	if err != nil {
 		return err
 	}
-	if err := service.Connect(); err != nil {
+	a.service = service
+
+	// listenerها برای تشخیص قطعی و ثبت بازهٔ آن (برای backfill هدف‌دار در E4)
+	service.AddReconnectionAttemptListener(func(e sol.ServiceEvent) {
+		a.markDown(e.GetTimestamp())
+	})
+	service.AddReconnectionListener(func(e sol.ServiceEvent) {
+		a.markUp(e.GetTimestamp())
+	})
+	service.AddServiceInterruptionListener(func(e sol.ServiceEvent) {
+		a.markDown(e.GetTimestamp())
+		log.Printf("⛔ Solace service interruption: %s", e.GetMessage())
+	})
+
+	if err := a.connectWithBackoff(ctx); err != nil {
 		return err
 	}
-	a.service = service
 	log.Println("✅ Connected to Solace (secure TLS)")
 
 	// بدون WithMessageAutoAcknowledgement → ack دستی (client-ack)
@@ -85,6 +144,30 @@ func (a *Adapter) Start(ctx context.Context, emit ingest.EmitFunc) error {
 	// تا لغو context فعال بمان
 	<-ctx.Done()
 	return nil
+}
+
+// connectWithBackoff تلاش اولیهٔ اتصال را با backoff نمایی تا لغو ctx تکرار می‌کند
+// (تا اگر broker هنگام راه‌اندازی در دسترس نبود، اپ crash نکند).
+func (a *Adapter) connectWithBackoff(ctx context.Context) error {
+	backoff := reconnectInterval
+	for {
+		if err := a.service.Connect(); err == nil {
+			return nil
+		} else {
+			log.Printf("⏳ Solace connect failed, retrying in %s: %v", backoff, err)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(backoff):
+		}
+		if backoff < startupBackoffMax {
+			backoff *= 2
+			if backoff > startupBackoffMax {
+				backoff = startupBackoffMax
+			}
+		}
+	}
 }
 
 // handle یک پیام را emit می‌کند و فقط در صورت موفقیت ack می‌زند.

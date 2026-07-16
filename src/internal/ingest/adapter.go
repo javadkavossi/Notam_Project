@@ -7,6 +7,7 @@ package ingest
 
 import (
 	"context"
+	"log"
 	"time"
 )
 
@@ -22,6 +23,19 @@ type RawNotamMessage struct {
 // اگر nil برگرداند، آداپتور باید پیام را در منبع ack کند؛ در صورت خطا نباید ack کند
 // تا منبع پیام را دوباره تحویل دهد (at-least-once).
 type EmitFunc func(RawNotamMessage) error
+
+// OutageSink بازهٔ قطعیِ یک منبع را ثبت می‌کند تا بعداً backfill هدف‌دار روی آن اجرا شود (E1-3 → E4).
+type OutageSink interface {
+	RecordOutage(source string, start, end time.Time)
+}
+
+// LogOutageSink پیاده‌سازی پیش‌فرض که بازهٔ قطعی را لاگ می‌کند (تا نسخهٔ DB-محور در E4).
+type LogOutageSink struct{}
+
+func (LogOutageSink) RecordOutage(source string, start, end time.Time) {
+	log.Printf("📉 OUTAGE source=%s from=%s to=%s duration=%s",
+		source, start.UTC().Format(time.RFC3339), end.UTC().Format(time.RFC3339), end.Sub(start).Round(time.Second))
+}
 
 // SourceAdapter قرارداد یک منبع NOTAM.
 type SourceAdapter interface {

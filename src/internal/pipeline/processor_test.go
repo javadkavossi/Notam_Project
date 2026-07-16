@@ -72,6 +72,23 @@ func TestProcess_ParseError(t *testing.T) {
 	}
 }
 
+func TestDLQValues(t *testing.T) {
+	raw := rawWith("<broken")
+	vals := DLQValues(raw, "xml: parse error")
+	if vals[fieldPayload] != "<broken" {
+		t.Errorf("payload در DLQ حفظ نشد: %v", vals[fieldPayload])
+	}
+	if vals[fieldError] != "xml: parse error" {
+		t.Errorf("پیام خطا در DLQ ثبت نشد: %v", vals[fieldError])
+	}
+	if vals[fieldSource] != "FAA_SWIM" {
+		t.Errorf("source در DLQ نادرست: %v", vals[fieldSource])
+	}
+	if _, ok := vals[fieldFailedAt]; !ok {
+		t.Error("failed_at باید ثبت شود")
+	}
+}
+
 func TestStreamValuesRoundTrip(t *testing.T) {
 	raw := rawWith(xmlWith("OIIX", "OIII", "X"))
 	vals := StreamValues(raw)

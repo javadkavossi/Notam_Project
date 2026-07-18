@@ -51,6 +51,14 @@ type Notam struct {
 	BaseLevel    string      `gorm:"size:10;index"` // CRITICAL/HIGH/MEDIUM/LOW/INFO
 	WeightsVer   string      `gorm:"size:12"`       // نسخهٔ جدول وزن‌دهی (audit)
 
+	// ---- هندسه و ارتفاع فضای هوایی (E5.6) — از خط Q؛ ستون area (PostGIS) از این‌ها ساخته می‌شود ----
+	AreaLat      float64 // مرکز
+	AreaLon      float64
+	AreaRadiusNM float64 // شعاع NM؛ >۰ یعنی هندسه معلوم است
+	LowerFt      int     // حد پایین ارتفاع (فوت)
+	UpperFt      int     // حد بالا ارتفاع (فوت)
+	VerticalKnown bool   // آیا حدود ارتفاعی معلوم است
+
 	// ارجاع اختیاری (بدون FK - NOTAMها از فرودگاه‌های مختلف FAA می‌آیند)
 	AirportICAO string `gorm:"size:8;index"` // کد ICAO محل - لزوماً در جدول airports نیست
 	RunwayID    *uint  `gorm:"index"`

@@ -1,7 +1,9 @@
 package briefing
 
 import (
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/hossein-repo/BaseProject/data/db/model"
 	"github.com/hossein-repo/BaseProject/internal/pipeline/analysis"
@@ -35,6 +37,41 @@ type FlightContext struct {
 	AircraftCategory string         // JET / TURBOPROP / PISTON
 	FlightRules      string         // IFR / VFR
 	RunwayCounts     map[string]int // ICAO فرودگاه → تعداد باند فعال
+
+	// تداخل مسیر/ارتفاع فضای هوایی (E5.6)
+	CruiseAltitudeFt     int          // ۰ = نامعلوم → UNKNOWN_FLIGHT_LEVEL
+	RouteKnown           bool         // آیا کریدور مسیر ساخته شد (مختصات مبدأ/مقصد موجود)؟
+	RouteIntersects      map[int]bool // notamID → area با کریدور مسیر تداخل افقی دارد؟
+	WindowFrom, WindowTo time.Time    // پنجرهٔ زمانی پرواز (برای تداخل زمانی)
+}
+
+// وضعیت تداخل هندسی/ارتفاعی/زمانی فضای هوایی (E5.6).
+const (
+	CtxFullIntersection    = "FULL_INTERSECTION"
+	CtxNoIntersection      = "NO_INTERSECTION"
+	CtxHorizontalOnly      = "HORIZONTAL_INTERSECTION_ONLY"
+	CtxVerticalOnly        = "VERTICAL_INTERSECTION_ONLY"
+	CtxUnknownGeometry     = "UNKNOWN_GEOMETRY"
+	CtxUnknownAltitude     = "UNKNOWN_ALTITUDE"
+	CtxUnknownFlightLevel  = "UNKNOWN_FLIGHT_LEVEL"
+)
+
+// سطوح اطمینان.
+const (
+	ConfHigh   = "HIGH"
+	ConfMedium = "MEDIUM"
+	ConfLow    = "LOW"
+)
+
+// GeoAssessment خروجی توضیح‌پذیرِ ارزیابی تداخل فضای هوایی (برای NOTAMهای Airspace/Restriction).
+type GeoAssessment struct {
+	ContextResult          string   `json:"contextResult"`
+	HorizontalIntersection *bool    `json:"horizontalIntersection"` // nil = نامعلوم
+	VerticalIntersection   *bool    `json:"verticalIntersection"`   // nil = نامعلوم
+	TemporalIntersection   bool     `json:"temporalIntersection"`
+	Confidence             string   `json:"confidence"` // HIGH/MEDIUM/LOW
+	Reasons                []string `json:"reasons"`
+	MissingData            []string `json:"missingData"`
 }
 
 // ImpactResult خروجی ارزیابی اثر عملیاتی.
@@ -42,7 +79,8 @@ type ImpactResult struct {
 	Score  int
 	Level  string
 	Effect string
-	Action string // اقدام پیشنهادی برای خلبان/دیسپچر
+	Action string         // اقدام پیشنهادی برای خلبان/دیسپچر
+	Geo    *GeoAssessment // فقط برای فضای هوایی (E5.6)
 }
 
 // EvaluateImpact امتیاز نهایی + اثر + اقدام را برای یک NOTAM در بستر یک پرواز می‌سازد.
@@ -59,6 +97,11 @@ func EvaluateImpact(n model.Notam, role, roleICAO string, ctx FlightContext) Imp
 		if fuel := fuelTypeInText(n.PlainText); fuel != "" && !fuelMatchesAircraft(fuel, ctx.AircraftCategory) {
 			return notApplicable(n.BaseScore, "سوخت "+fuel+" برای این هواپیما ("+ctx.AircraftCategory+") کاربرد ندارد")
 		}
+	}
+
+	// ---- فاکتور بستر: تداخل مسیر/ارتفاع/زمان برای فضای هوایی (E5.6) ----
+	if effect == EffectRouteRestriction {
+		return assessAirspace(n, ctx)
 	}
 
 	// ---- فاکتور بستر ۳: تعداد باند — سیگنالِ غالب برای بستن باند ----
@@ -88,6 +131,119 @@ func EvaluateImpact(n model.Notam, role, roleICAO string, ctx FlightContext) Imp
 func result(score int, effect, action string) ImpactResult {
 	score = analysis.Clamp(score)
 	return ImpactResult{Score: score, Level: analysis.LevelFor(score), Effect: effect, Action: action}
+}
+
+// medianCap سقفِ MEDIUM؛ برای موارد نامعلوم تا هرگز به‌طور خودکار HIGH/CRITICAL نشوند.
+const mediumCap = 59
+
+// assessAirspace تداخل افقی/عمودی/زمانی یک NOTAM فضای هوایی را با پرواز ارزیابی می‌کند (E5.6).
+//
+// اصل ایمنی: نبودِ geometry/altitude/flight-level هرگز به HIGH/CRITICAL نگاشت نمی‌شود؛
+// IMPACTED فقط با تداخلِ تأییدشده صادر می‌شود. کم‌گویی هم پرهیز می‌شود: موارد نامعلوم پنهان
+// نمی‌شوند (تا سطح MEDIUM قابل‌مشاهده می‌مانند و در missingData علامت می‌خورند).
+func assessAirspace(n model.Notam, ctx FlightContext) ImpactResult {
+	g := &GeoAssessment{TemporalIntersection: true}
+	base := n.BaseScore + roleBonus(n, model.RoleEnroute)
+
+	// ---- تداخل زمانی (پنجرهٔ پرواز) ----
+	if !ctx.WindowFrom.IsZero() {
+		temporal := temporalOverlap(n, ctx.WindowFrom, ctx.WindowTo)
+		g.TemporalIntersection = temporal
+		if !temporal {
+			g.ContextResult = CtxNoIntersection
+			g.Confidence = ConfHigh
+			g.Reasons = append(g.Reasons, "زمان پرواز خارج از بازهٔ اعتبار NOTAM است")
+			return airspaceResult(informationalScore(n.BaseScore), EffectNotApplicable,
+				"NOTAM در زمان این پرواز فعال نیست", g)
+		}
+	}
+
+	hasArea := n.AreaRadiusNM > 0
+	notamAltKnown := n.VerticalKnown
+	flightAltKnown := ctx.CruiseAltitudeFt > 0
+
+	// ---- هندسه یا مسیر نامعلوم → بدون تصمیم قطعی، بدون تشدید ----
+	if !hasArea {
+		g.ContextResult = CtxUnknownGeometry
+		g.Confidence = ConfLow
+		g.MissingData = append(g.MissingData, "notamGeometry")
+		g.Reasons = append(g.Reasons, "هندسهٔ محدودهٔ NOTAM موجود نیست؛ تداخل قابل تأیید نیست")
+		return airspaceResult(minInt(base, mediumCap), EffectRouteRestriction, defaultAction(EffectRouteRestriction), g)
+	}
+	if !ctx.RouteKnown {
+		g.ContextResult = CtxUnknownGeometry
+		g.Confidence = ConfLow
+		g.MissingData = append(g.MissingData, "flightRoute")
+		g.Reasons = append(g.Reasons, "مختصات مبدأ/مقصد برای ساخت مسیر موجود نیست")
+		return airspaceResult(minInt(base, mediumCap), EffectRouteRestriction, defaultAction(EffectRouteRestriction), g)
+	}
+
+	// ---- تداخل افقی (مسیر ↔ محدوده) ----
+	horizontal := ctx.RouteIntersects[n.Id]
+	g.HorizontalIntersection = &horizontal
+
+	// اگر مسیر عبور نمی‌کند، ارتفاع بی‌اهمیت است (دروازهٔ افقی قطعی).
+	if !horizontal {
+		g.ContextResult = CtxNoIntersection
+		g.Confidence = ConfMedium // مسیرِ مستقیمِ تقریبی
+		g.Reasons = append(g.Reasons, fmt.Sprintf("مسیر از محدودهٔ NOTAM عبور نمی‌کند (کریدور ~%.0fNM، مسیر مستقیم تقریبی)", routeCorridorNM))
+		return airspaceResult(informationalScore(n.BaseScore), EffectNotApplicable,
+			"مسیر پرواز وارد این محدوده نمی‌شود", g)
+	}
+
+	// ---- مسیر عبور می‌کند → بررسی ارتفاع ----
+	if !notamAltKnown {
+		g.ContextResult = CtxUnknownAltitude
+		g.Confidence = ConfLow
+		g.MissingData = append(g.MissingData, "notamAltitude")
+		g.Reasons = append(g.Reasons, "تداخل افقی هست ولی حدود ارتفاعی NOTAM نامشخص است")
+		return airspaceResult(minInt(base, mediumCap), EffectRouteRestriction,
+			"تداخل افقی؛ حدود ارتفاعی نامشخص — دستی بررسی شود", g)
+	}
+	if !flightAltKnown {
+		g.ContextResult = CtxUnknownFlightLevel
+		g.Confidence = ConfLow
+		g.MissingData = append(g.MissingData, "flightLevel")
+		g.Reasons = append(g.Reasons, "تداخل افقی هست ولی ارتفاع سِیر پرواز ثبت نشده")
+		return airspaceResult(minInt(base, mediumCap), EffectRouteRestriction,
+			"تداخل افقی؛ ارتفاع پرواز را وارد کنید تا تداخل عمودی سنجیده شود", g)
+	}
+
+	vertical := ctx.CruiseAltitudeFt >= n.LowerFt && ctx.CruiseAltitudeFt <= n.UpperFt
+	g.VerticalIntersection = &vertical
+	g.Confidence = ConfMedium // افقی تقریبی، عمودی/زمانی دقیق
+
+	if vertical {
+		g.ContextResult = CtxFullIntersection
+		g.Reasons = append(g.Reasons, fmt.Sprintf("تداخل افقی، عمودی (%dft در بازهٔ %d→%dft) و زمانی تأیید شد",
+			ctx.CruiseAltitudeFt, n.LowerFt, n.UpperFt))
+		// IMPACTED: امتیاز کامل حفظ می‌شود (تداخل واقعی)
+		return airspaceResult(analysis.Clamp(base), EffectRouteRestriction,
+			"محدودیت فضای هوایی روی مسیر و ارتفاع این پرواز — بررسی و هماهنگی لازم", g)
+	}
+
+	// تداخل افقی هست ولی ارتفاع خارج از بازه
+	g.ContextResult = CtxHorizontalOnly
+	g.Reasons = append(g.Reasons, fmt.Sprintf("مسیر عبور می‌کند ولی ارتفاع پرواز (%dft) خارج از بازهٔ NOTAM (%d→%dft) است",
+		ctx.CruiseAltitudeFt, n.LowerFt, n.UpperFt))
+	return airspaceResult(informationalScore(n.BaseScore), EffectNotApplicable,
+		"مسیر عبور می‌کند ولی در ارتفاع دیگری", g)
+}
+
+func airspaceResult(score int, effect, action string, g *GeoAssessment) ImpactResult {
+	score = analysis.Clamp(score)
+	return ImpactResult{Score: score, Level: analysis.LevelFor(score), Effect: effect, Action: action, Geo: g}
+}
+
+// temporalOverlap: بازهٔ اعتبار NOTAM با پنجرهٔ پرواز هم‌پوشانی دارد؟
+func temporalOverlap(n model.Notam, from, to time.Time) bool {
+	if !n.EffectiveStart.IsZero() && n.EffectiveStart.After(to) {
+		return false
+	}
+	if n.EffectiveEnd != nil && !n.EffectiveEnd.IsZero() && n.EffectiveEnd.Before(from) {
+		return false
+	}
+	return true
 }
 
 func notApplicable(base int, action string) ImpactResult {

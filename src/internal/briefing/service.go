@@ -26,10 +26,12 @@ func (s *Service) Build(fp model.FlightPlan) (Briefing, error) {
 	if err != nil {
 		return Briefing{}, err
 	}
-	return Build(fp, notams, s.flightContext(fp)), nil
+	ctx := s.flightContext(fp)
+	ctx.RouteKnown, ctx.RouteIntersects = s.routeIntersections(fp, notams)
+	return Build(fp, notams, ctx), nil
 }
 
-// flightContext بستر پرواز (تعداد باند فرودگاه‌ها + نوع هواپیما + قوانین) را می‌سازد (E5.5).
+// flightContext بستر پرواز (تعداد باند + نوع هواپیما + قوانین + ارتفاع سِیر) را می‌سازد (E5.5/E5.6).
 func (s *Service) flightContext(fp model.FlightPlan) FlightContext {
 	counts, err := s.ref.RunwayCounts(fp.Airports())
 	if err != nil || counts == nil {
@@ -43,7 +45,61 @@ func (s *Service) flightContext(fp model.FlightPlan) FlightContext {
 	if acft == "" {
 		acft = model.AircraftJet
 	}
-	return FlightContext{AircraftCategory: acft, FlightRules: rules, RunwayCounts: counts}
+	from, to := fp.Window()
+	return FlightContext{
+		AircraftCategory: acft,
+		FlightRules:      rules,
+		RunwayCounts:     counts,
+		CruiseAltitudeFt: fp.CruiseAltitudeFt,
+		WindowFrom:       from,
+		WindowTo:         to,
+	}
+}
+
+// routeCorridorNM نصف‌عرضِ کریدور مسیر (NM). چون فعلاً مسیر تقریبِ دایره‌الوسط مبدأ→مقصد است
+// (بدون waypoint واقعی)، عرضِ سخاوتمندانه انتخاب می‌شود تا تداخل واقعی از دست نرود (پرهیز از کم‌گویی).
+const routeCorridorNM = 25.0
+
+// routeIntersections برای NOTAMهای دارای هندسه تعیین می‌کند کدام‌ها با کریدور مسیر تداخل افقی دارند.
+// از PostGIS و دادهٔ واقعی استفاده می‌کند؛ اگر مختصات مبدأ/مقصد نبود، routeKnown=false.
+func (s *Service) routeIntersections(fp model.FlightPlan, notams []model.Notam) (bool, map[int]bool) {
+	out := map[int]bool{}
+	adep, _ := s.ref.FindAirport(fp.ADEP)
+	ades, _ := s.ref.FindAirport(fp.ADES)
+	if adep == nil || ades == nil || (adep.Lat == 0 && adep.Lon == 0) || (ades.Lat == 0 && ades.Lon == 0) {
+		return false, out // مسیر نامعلوم
+	}
+	ids := make([]int, 0, len(notams))
+	for _, n := range notams {
+		if n.AreaRadiusNM > 0 {
+			ids = append(ids, n.Id)
+		}
+	}
+	if len(ids) == 0 {
+		return true, out
+	}
+	// کریدور: بافرِ geodesic دور خط مبدأ→مقصد (geography → عبور از دایره‌الوسط).
+	corridorMeters := routeCorridorNM * 1852.0
+	var hitIDs []int
+	err := s.db.Raw(`
+		WITH corr AS (
+		  SELECT ST_Buffer(
+		    ST_SetSRID(ST_MakeLine(ST_MakePoint(?, ?), ST_MakePoint(?, ?)), 4326)::geography,
+		    ?
+		  )::geometry AS g
+		)
+		SELECT n.id FROM notams n, corr
+		WHERE n.id IN ? AND n.area IS NOT NULL AND ST_Intersects(n.area, corr.g)`,
+		adep.Lon, adep.Lat, ades.Lon, ades.Lat, corridorMeters, ids,
+	).Scan(&hitIDs).Error
+	if err != nil {
+		// در صورت خطای فضایی، مسیر را «نامعلوم» اعلام کن (نه «بدون تداخل») تا کم‌گویی رخ ندهد.
+		return false, out
+	}
+	for _, id := range hitIDs {
+		out[id] = true
+	}
+	return true, out
 }
 
 // matchNotams تطبیق مکانی (فرودگاه‌های پرواز یا FIRهای مسیر) و زمانی (هم‌پوشانی با پنجرهٔ پرواز).

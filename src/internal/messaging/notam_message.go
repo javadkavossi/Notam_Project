@@ -28,6 +28,12 @@ type NotamEvent struct {
 	Schedule string `xml:"hasMember>Event>timeSlice>EventTimeSlice>textNOTAM>NOTAM>schedule"`
 	ICAOLocation      string `xml:"hasMember>Event>timeSlice>EventTimeSlice>extension>EventExtension>icaoLocation"`
 	AirportName       string `xml:"hasMember>Event>timeSlice>EventTimeSlice>extension>EventExtension>airportname"`
+
+	// هندسه و ارتفاع ساختاریافتهٔ فضای هوایی (خط Q) — برای تداخل مسیر/ارتفاع (E5.6).
+	Coordinates string `xml:"hasMember>Event>timeSlice>EventTimeSlice>textNOTAM>NOTAM>coordinates"` // مرکز مثل 5609N04020E
+	Radius      string `xml:"hasMember>Event>timeSlice>EventTimeSlice>textNOTAM>NOTAM>radius"`      // شعاع بر حسب NM (مثل 002)
+	MinimumFL   string `xml:"hasMember>Event>timeSlice>EventTimeSlice>textNOTAM>NOTAM>minimumFL"`   // FL پایین (000=زمین)
+	MaximumFL   string `xml:"hasMember>Event>timeSlice>EventTimeSlice>textNOTAM>NOTAM>maximumFL"`   // FL بالا (999=نامحدود)
 }
 
 // NotamMessage پیام پردازش‌شدهٔ NOTAM که به لایهٔ storage تحویل می‌شود (interface Message را برآورده می‌کند).

@@ -33,6 +33,7 @@ type FlightRequest struct {
 	BufferMinutes    int      `json:"bufferMinutes"`
 	AircraftCategory string   `json:"aircraftCategory"` // JET/TURBOPROP/PISTON (پیش‌فرض JET)
 	FlightRules      string   `json:"flightRules"`      // IFR/VFR (پیش‌فرض IFR)
+	CruiseAltitudeFt int      `json:"cruiseAltitudeFt"` // ارتفاع سِیر (فوت)؛ ۰ = نامعلوم
 	Note             string   `json:"note"`
 }
 
@@ -72,6 +73,7 @@ func (r FlightRequest) toModel(username string) (model.FlightPlan, error) {
 		BufferMinutes:    buf,
 		AircraftCategory: acft,
 		FlightRules:      rules,
+		CruiseAltitudeFt: r.CruiseAltitudeFt,
 		Note:             r.Note,
 	}, nil
 }

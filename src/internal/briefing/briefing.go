@@ -43,9 +43,10 @@ type Item struct {
 	RoleICAO        string    `json:"roleIcao"`        // فرودگاه/FIR مربوطه
 	ContextualScore int       `json:"contextualScore"` // امتیاز نهاییِ وابسته به این پرواز
 	ContextualLevel string    `json:"contextualLevel"`
-	Effect          string    `json:"effect"`      // اثر عملیاتی (RUNWAY_UNAVAILABLE/…)
-	Action          string    `json:"action"`      // اقدام پیشنهادی برای خلبان/دیسپچر
-	MatchReason     string    `json:"matchReason"` // چرا این NOTAM انتخاب شد
+	Effect          string         `json:"effect"`         // اثر عملیاتی (RUNWAY_UNAVAILABLE/…)
+	Action          string         `json:"action"`         // اقدام پیشنهادی برای خلبان/دیسپچر
+	Geo             *GeoAssessment `json:"geo,omitempty"`  // ارزیابی تداخل فضای هوایی (E5.6)
+	MatchReason     string         `json:"matchReason"`    // چرا این NOTAM انتخاب شد
 }
 
 // Group گروهی از ردیف‌ها (بر اساس نقش).
@@ -115,6 +116,7 @@ func Build(fp model.FlightPlan, notams []model.Notam, ctx FlightContext) Briefin
 		item.ContextualLevel = imp.Level
 		item.Effect = imp.Effect
 		item.Action = imp.Action
+		item.Geo = imp.Geo
 		item.MatchReason = matchReason(n, role, roleICAO)
 
 		byRole[role] = append(byRole[role], item)

@@ -53,6 +53,9 @@ func (r *NotamRepository) Save(msg messaging.Message) {
 		if err := r.db.Model(&existing).Updates(&n).Error; err != nil {
 			log.Printf("❌ Update NOTAM failed: %v", err)
 		}
+		if n.AreaRadiusNM > 0 {
+			r.PopulateArea(n.Id)
+		}
 		return
 	} else if err != gorm.ErrRecordNotFound {
 		log.Printf("❌ Lookup NOTAM failed: %v", err)
@@ -62,6 +65,9 @@ func (r *NotamRepository) Save(msg messaging.Message) {
 	if err := r.db.Create(&n).Error; err != nil {
 		log.Printf("❌ Save NOTAM failed: %v", err)
 		return
+	}
+	if n.AreaRadiusNM > 0 {
+		r.PopulateArea(n.Id)
 	}
 
 	r.evaluateAlertDeliveries(&n)
@@ -195,6 +201,9 @@ func (r *NotamRepository) eventToNotam(ev messaging.NotamEvent, notamMsg messagi
 	// تحلیل و امتیاز اهمیت پایه (E3) — قاعده‌محور و مستقل از پرواز
 	an := analysis.Analyze(ev)
 
+	// هندسه و ارتفاع فضای هوایی (E5.6) — از خط Q، بدون جعل
+	geo := messaging.ExtractGeo(ev)
+
 	return model.Notam{
 		MessageID:      notamMsg.ID(),
 		SeriesNumber:   seriesNum,
@@ -224,6 +233,25 @@ func (r *NotamRepository) eventToNotam(ev messaging.NotamEvent, notamMsg messagi
 		BaseScore:    an.BaseScore,
 		BaseLevel:    an.BaseLevel,
 		WeightsVer:   analysis.WeightsVersion,
+
+		AreaLat:       geo.Lat,
+		AreaLon:       geo.Lon,
+		AreaRadiusNM:  geo.RadiusNM,
+		LowerFt:       geo.LowerFt,
+		UpperFt:       geo.UpperFt,
+		VerticalKnown: geo.HasVertical,
+	}
+}
+
+// PopulateArea ستون geometry (PostGIS) را از مرکز+شعاعِ ذخیره‌شده می‌سازد (E5.6).
+// دایرهٔ دقیق با بافر geography (NM→متر). فقط برای رکوردهای دارای هندسه اجرا می‌شود.
+func (r *NotamRepository) PopulateArea(id int) {
+	err := r.db.Exec(
+		`UPDATE notams
+		 SET area = ST_Buffer(ST_SetSRID(ST_MakePoint(area_lon, area_lat), 4326)::geography, area_radius_nm * 1852.0)::geometry
+		 WHERE id = ? AND area_radius_nm > 0`, id).Error
+	if err != nil {
+		log.Printf("⚠️ PopulateArea failed for #%d: %v", id, err)
 	}
 }
 

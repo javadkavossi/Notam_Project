@@ -58,6 +58,7 @@ func main() {
 		ev.HumanReadableText = messaging.EnsureHumanReadableText(ev)
 
 		an := analysis.Analyze(ev)
+		geo := messaging.ExtractGeo(ev)
 		canonical := messaging.CanonicalKey(n.LocationICAO, n.SeriesNumber)
 		if canonical == "" {
 			canonical = "MSG:" + n.MessageID
@@ -81,13 +82,27 @@ func main() {
 			"category":      an.Category,
 			"flight_phases": model.StringSlice(an.Phases),
 			"tags":          model.StringSlice(an.Tags),
-			"base_score":    an.BaseScore,
-			"base_level":    an.BaseLevel,
-			"weights_ver":   analysis.WeightsVersion,
+			"base_score":     an.BaseScore,
+			"base_level":     an.BaseLevel,
+			"weights_ver":    analysis.WeightsVersion,
+			"area_lat":       geo.Lat,
+			"area_lon":       geo.Lon,
+			"area_radius_nm": geo.RadiusNM,
+			"lower_ft":       geo.LowerFt,
+			"upper_ft":       geo.UpperFt,
+			"vertical_known": geo.HasVertical,
 		}).Error
 		if err != nil {
 			log.Printf("⚠️ به‌روزرسانی #%d ناموفق: %v", n.Id, err)
 			continue
+		}
+		// ساخت ستون geometry از مرکز+شعاع (فقط برای موارد دارای هندسه)
+		if geo.HasArea {
+			if e := gdb.Exec(
+				`UPDATE notams SET area = ST_Buffer(ST_SetSRID(ST_MakePoint(area_lon, area_lat),4326)::geography, area_radius_nm*1852.0)::geometry WHERE id = ?`,
+				n.Id).Error; e != nil {
+				log.Printf("⚠️ area #%d: %v", n.Id, e)
+			}
 		}
 		updated++
 	}

@@ -1,17 +1,21 @@
 package briefing
 
 import (
+	"strings"
+
 	"github.com/hossein-repo/BaseProject/data/db"
 	"github.com/hossein-repo/BaseProject/data/db/model"
+	"github.com/hossein-repo/BaseProject/internal/reference"
 	"gorm.io/gorm"
 )
 
 // Service ساخت بریفینگ از دیتابیس.
 type Service struct {
-	db *gorm.DB
+	db  *gorm.DB
+	ref *reference.Store
 }
 
-func NewService() *Service { return &Service{db: db.GetDb()} }
+func NewService() *Service { return &Service{db: db.GetDb(), ref: reference.NewStore()} }
 
 // maxNotamsPerBriefing سقف ایمنی برای جلوگیری از پاسخ‌های عظیم.
 const maxNotamsPerBriefing = 500
@@ -22,7 +26,24 @@ func (s *Service) Build(fp model.FlightPlan) (Briefing, error) {
 	if err != nil {
 		return Briefing{}, err
 	}
-	return Build(fp, notams), nil
+	return Build(fp, notams, s.flightContext(fp)), nil
+}
+
+// flightContext بستر پرواز (تعداد باند فرودگاه‌ها + نوع هواپیما + قوانین) را می‌سازد (E5.5).
+func (s *Service) flightContext(fp model.FlightPlan) FlightContext {
+	counts, err := s.ref.RunwayCounts(fp.Airports())
+	if err != nil || counts == nil {
+		counts = map[string]int{}
+	}
+	rules := strings.ToUpper(strings.TrimSpace(fp.FlightRules))
+	if rules == "" {
+		rules = model.RulesIFR
+	}
+	acft := strings.ToUpper(strings.TrimSpace(fp.AircraftCategory))
+	if acft == "" {
+		acft = model.AircraftJet
+	}
+	return FlightContext{AircraftCategory: acft, FlightRules: rules, RunwayCounts: counts}
 }
 
 // matchNotams تطبیق مکانی (فرودگاه‌های پرواز یا FIRهای مسیر) و زمانی (هم‌پوشانی با پنجرهٔ پرواز).

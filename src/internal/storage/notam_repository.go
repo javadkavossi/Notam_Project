@@ -217,6 +217,7 @@ func (r *NotamRepository) eventToNotam(ev messaging.NotamEvent, notamMsg messagi
 		QCode:        an.QCode,
 		QSubject:     an.Subject,
 		QCondition:   an.Condition,
+		Traffic:      strings.ToUpper(strings.TrimSpace(ev.Traffic)),
 		Category:     an.Category,
 		FlightPhases: model.StringSlice(an.Phases),
 		Tags:         model.StringSlice(an.Tags),

@@ -26,8 +26,21 @@ type FlightPlan struct {
 	ETA           time.Time `gorm:"type:TIMESTAMP with time zone;not null"` // زمان تخمینی رسیدن
 	BufferMinutes int       `gorm:"default:60"`                             // حاشیهٔ اطمینان پنجرهٔ زمانی
 
+	// بستر پرواز برای لایهٔ Operational Impact (E5.5)
+	AircraftCategory string `gorm:"size:12;default:JET"` // JET / TURBOPROP / PISTON
+	FlightRules      string `gorm:"size:4;default:IFR"`  // IFR / VFR
+
 	Note string `gorm:"size:200"`
 }
+
+// دسته‌های هواپیما و قوانین پرواز.
+const (
+	AircraftJet       = "JET"
+	AircraftTurboprop = "TURBOPROP"
+	AircraftPiston    = "PISTON"
+	RulesIFR          = "IFR"
+	RulesVFR          = "VFR"
+)
 
 func (FlightPlan) TableName() string { return "flight_plans" }
 

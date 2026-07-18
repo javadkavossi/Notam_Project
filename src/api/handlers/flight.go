@@ -28,10 +28,12 @@ type FlightRequest struct {
 	ADES          string   `json:"ades" binding:"required"`
 	Alternates    []string `json:"alternates"`
 	EnrouteFirs   []string `json:"enrouteFirs"`
-	ETD           string   `json:"etd" binding:"required"` // RFC3339
-	ETA           string   `json:"eta" binding:"required"` // RFC3339
-	BufferMinutes int      `json:"bufferMinutes"`
-	Note          string   `json:"note"`
+	ETD              string   `json:"etd" binding:"required"` // RFC3339
+	ETA              string   `json:"eta" binding:"required"` // RFC3339
+	BufferMinutes    int      `json:"bufferMinutes"`
+	AircraftCategory string   `json:"aircraftCategory"` // JET/TURBOPROP/PISTON (پیش‌فرض JET)
+	FlightRules      string   `json:"flightRules"`      // IFR/VFR (پیش‌فرض IFR)
+	Note             string   `json:"note"`
 }
 
 // toModel بدنه را به مدل تبدیل و اعتبارسنجی می‌کند.
@@ -51,16 +53,26 @@ func (r FlightRequest) toModel(username string) (model.FlightPlan, error) {
 	if buf > 24*60 {
 		buf = 24 * 60
 	}
+	acft := strings.ToUpper(strings.TrimSpace(r.AircraftCategory))
+	if acft != model.AircraftTurboprop && acft != model.AircraftPiston {
+		acft = model.AircraftJet
+	}
+	rules := strings.ToUpper(strings.TrimSpace(r.FlightRules))
+	if rules != model.RulesVFR {
+		rules = model.RulesIFR
+	}
 	return model.FlightPlan{
-		Username:      username,
-		ADEP:          strings.ToUpper(strings.TrimSpace(r.ADEP)),
-		ADES:          strings.ToUpper(strings.TrimSpace(r.ADES)),
-		Alternates:    model.StringSlice(upperAll(r.Alternates)),
-		EnrouteFIRs:   model.StringSlice(upperAll(r.EnrouteFirs)),
-		ETD:           etd.UTC(),
-		ETA:           eta.UTC(),
-		BufferMinutes: buf,
-		Note:          r.Note,
+		Username:         username,
+		ADEP:             strings.ToUpper(strings.TrimSpace(r.ADEP)),
+		ADES:             strings.ToUpper(strings.TrimSpace(r.ADES)),
+		Alternates:       model.StringSlice(upperAll(r.Alternates)),
+		EnrouteFIRs:      model.StringSlice(upperAll(r.EnrouteFirs)),
+		ETD:              etd.UTC(),
+		ETA:              eta.UTC(),
+		BufferMinutes:    buf,
+		AircraftCategory: acft,
+		FlightRules:      rules,
+		Note:             r.Note,
 	}, nil
 }
 

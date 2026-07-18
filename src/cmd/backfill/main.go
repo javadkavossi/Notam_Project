@@ -14,6 +14,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/hossein-repo/BaseProject/config"
 	"github.com/hossein-repo/BaseProject/data/db"
@@ -76,6 +77,7 @@ func main() {
 			"q_code":        an.QCode,
 			"q_subject":     an.Subject,
 			"q_condition":   an.Condition,
+			"traffic":       strings.ToUpper(strings.TrimSpace(ev.Traffic)),
 			"category":      an.Category,
 			"flight_phases": model.StringSlice(an.Phases),
 			"tags":          model.StringSlice(an.Tags),

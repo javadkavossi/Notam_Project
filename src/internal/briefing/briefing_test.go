@@ -64,13 +64,17 @@ func TestClassifyRole_CaseInsensitive(t *testing.T) {
 	}
 }
 
+func scoreOf(n model.Notam, role string) int {
+	return EvaluateImpact(n, role, "OIIE", FlightContext{}).Score
+}
+
 // همان NOTAM باید در مقصد امتیاز بیشتری از الترنت بگیرد (اصل وابستگی به کانتکست پرواز).
 func TestContextualScore_DependsOnRole(t *testing.T) {
 	n := notam(1, "OIIE", qcode.CatRunway, 70)
 
-	ades := contextualScore(n, model.RoleADES)
-	altn := contextualScore(n, model.RoleALTN)
-	enroute := contextualScore(n, model.RoleEnroute)
+	ades := scoreOf(n, model.RoleADES)
+	altn := scoreOf(n, model.RoleALTN)
+	enroute := scoreOf(n, model.RoleEnroute)
 
 	if !(ades > altn) {
 		t.Errorf("باند در مقصد (%d) باید > الترنت (%d)", ades, altn)
@@ -82,15 +86,15 @@ func TestContextualScore_DependsOnRole(t *testing.T) {
 
 func TestContextualScore_ArrivalRelevance(t *testing.T) {
 	// ILS در مقصد مرتبط با فرود است → بیشتر از یک دستهٔ نامرتبط با فرود (اپرون)
-	ils := contextualScore(notam(1, "OIIE", qcode.CatILS, 50), model.RoleADES)
-	apron := contextualScore(notam(2, "OIIE", qcode.CatApron, 50), model.RoleADES)
+	ils := scoreOf(notam(1, "OIIE", qcode.CatILS, 50), model.RoleADES)
+	apron := scoreOf(notam(2, "OIIE", qcode.CatApron, 50), model.RoleADES)
 	if !(ils > apron) {
 		t.Errorf("ILS مقصد (%d) باید > اپرون مقصد (%d)", ils, apron)
 	}
 }
 
 func TestContextualScore_Clamped(t *testing.T) {
-	if s := contextualScore(notam(1, "OIIE", qcode.CatRunway, 100), model.RoleADES); s != 100 {
+	if s := scoreOf(notam(1, "OIIE", qcode.CatRunway, 100), model.RoleADES); s != 100 {
 		t.Errorf("امتیاز باید در ۱۰۰ کلَمپ شود، دریافت %d", s)
 	}
 }
@@ -103,7 +107,7 @@ func TestBuild_GroupsAndCritical(t *testing.T) {
 		notam(3, "OISS", qcode.CatAerodrome, 30), // الترنت
 		{BaseModel: model.BaseModel{Id: 4}, AffectedFIR: "OIIX", Category: qcode.CatAirspace, BaseScore: 50},
 	}
-	b := Build(fp, notams)
+	b := Build(fp, notams, FlightContext{})
 
 	if b.TotalCount != 4 {
 		t.Errorf("TotalCount=%d، انتظار ۴", b.TotalCount)
@@ -137,7 +141,7 @@ func TestBuild_SortsByContextualScoreDesc(t *testing.T) {
 		notam(2, "OIIE", qcode.CatRunway, 80),
 		notam(3, "OIIE", qcode.CatLighting, 45),
 	}
-	b := Build(fp, notams)
+	b := Build(fp, notams, FlightContext{})
 	var ades *Group
 	for i := range b.Groups {
 		if b.Groups[i].Role == model.RoleADES {
@@ -157,7 +161,7 @@ func TestBuild_SortsByContextualScoreDesc(t *testing.T) {
 
 func TestBuild_WindowAndMatchReason(t *testing.T) {
 	fp := testFlight()
-	b := Build(fp, []model.Notam{notam(1, "OIIE", qcode.CatRunway, 70)})
+	b := Build(fp, []model.Notam{notam(1, "OIIE", qcode.CatRunway, 70)}, FlightContext{})
 
 	from, to := fp.Window()
 	if !b.WindowFrom.Equal(from) || !b.WindowTo.Equal(to) {

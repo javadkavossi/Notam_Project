@@ -128,3 +128,35 @@ func (s *Store) RunwaysFor(icao string) ([]model.Runway, error) {
 	err := s.db.Where("airport_icao = ?", strings.ToUpper(strings.TrimSpace(icao))).Find(&rws).Error
 	return rws, err
 }
+
+// RunwayCounts تعداد باندهای فعال (غیربسته) هر فرودگاه از فهرست داده‌شده را برمی‌گرداند (E5.5).
+// برای فاکتور بستر «تعداد باند»: بستن باند در فرودگاه تک‌باند بحرانی‌تر از چندباند است.
+func (s *Store) RunwayCounts(icaos []string) (map[string]int, error) {
+	out := make(map[string]int, len(icaos))
+	if len(icaos) == 0 {
+		return out, nil
+	}
+	up := make([]string, 0, len(icaos))
+	for _, c := range icaos {
+		if v := strings.ToUpper(strings.TrimSpace(c)); v != "" {
+			up = append(up, v)
+		}
+	}
+	type row struct {
+		AirportICAO string
+		Cnt         int
+	}
+	var rows []row
+	err := s.db.Model(&model.Runway{}).
+		Select("airport_icao, COUNT(*) AS cnt").
+		Where("airport_icao IN ? AND closed = ?", up, false).
+		Group("airport_icao").
+		Scan(&rows).Error
+	if err != nil {
+		return out, err
+	}
+	for _, r := range rows {
+		out[r.AirportICAO] = r.Cnt
+	}
+	return out, nil
+}

@@ -41,8 +41,10 @@ type Item struct {
 	Notam           ItemNotam `json:"notam"`
 	Role            string    `json:"role"`            // ADEP/ADES/ALTN/ENROUTE
 	RoleICAO        string    `json:"roleIcao"`        // فرودگاه/FIR مربوطه
-	ContextualScore int       `json:"contextualScore"` // امتیاز وابسته به این پرواز
+	ContextualScore int       `json:"contextualScore"` // امتیاز نهاییِ وابسته به این پرواز
 	ContextualLevel string    `json:"contextualLevel"`
+	Effect          string    `json:"effect"`      // اثر عملیاتی (RUNWAY_UNAVAILABLE/…)
+	Action          string    `json:"action"`      // اقدام پیشنهادی برای خلبان/دیسپچر
 	MatchReason     string    `json:"matchReason"` // چرا این NOTAM انتخاب شد
 }
 
@@ -87,7 +89,7 @@ var departureCategories = map[string]bool{
 }
 
 // Build بریفینگ را از NOTAMهای از‌پیش‌فیلترشده و پرواز می‌سازد (منطق خالص).
-func Build(fp model.FlightPlan, notams []model.Notam) Briefing {
+func Build(fp model.FlightPlan, notams []model.Notam, ctx FlightContext) Briefing {
 	from, to := fp.Window()
 	b := Briefing{
 		FlightID:      fp.Id,
@@ -108,8 +110,11 @@ func Build(fp model.FlightPlan, notams []model.Notam) Briefing {
 			Role:     role,
 			RoleICAO: roleICAO,
 		}
-		item.ContextualScore = contextualScore(n, role)
-		item.ContextualLevel = analysis.LevelFor(item.ContextualScore)
+		imp := EvaluateImpact(n, role, roleICAO, ctx)
+		item.ContextualScore = imp.Score
+		item.ContextualLevel = imp.Level
+		item.Effect = imp.Effect
+		item.Action = imp.Action
 		item.MatchReason = matchReason(n, role, roleICAO)
 
 		byRole[role] = append(byRole[role], item)
@@ -164,39 +169,6 @@ func classifyRole(fp model.FlightPlan, n model.Notam) (role, icao string) {
 	return model.RoleEnroute, up(n.AffectedFIR)
 }
 
-// contextualScore امتیاز پایه را بر اساس نقش این NOTAM در پرواز تعدیل می‌کند (E5-5).
-// اصل: یک NOTAM ممکن است برای یک پرواز بحرانی و برای پرواز دیگر کم‌اهمیت باشد.
-func contextualScore(n model.Notam, role string) int {
-	s := n.BaseScore
-	switch role {
-	case model.RoleADES:
-		// مقصد: باید آنجا فرود بیاییم → مرتبط با نزدیکی/فرود مهم‌تر است
-		if arrivalCategories[n.Category] {
-			s += 12
-		} else {
-			s += 4
-		}
-	case model.RoleADEP:
-		if departureCategories[n.Category] {
-			s += 8
-		} else {
-			s += 3
-		}
-	case model.RoleALTN:
-		// الترنت ثانویه است اما اگر خودِ فرودگاه بسته باشد حیاتی است
-		if n.Category == qcode.CatAerodrome || n.Category == qcode.CatRunway {
-			s += 6
-		} else {
-			s += 2
-		}
-	case model.RoleEnroute:
-		// مسیر: فضای هوایی/ناوبری مرتبط‌تر است
-		if n.Category == qcode.CatAirspace || n.Category == qcode.CatRestriction || n.Category == qcode.CatNavigation {
-			s += 5
-		}
-	}
-	return analysis.Clamp(s)
-}
 
 // matchReason توضیح انسانی اینکه چرا این NOTAM در بریفینگ آمده (شفافیت/ممیزی).
 func matchReason(n model.Notam, role, icao string) string {

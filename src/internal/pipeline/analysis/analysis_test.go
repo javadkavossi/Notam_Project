@@ -177,6 +177,20 @@ func TestATSServicesRecognized(t *testing.T) {
 	}
 }
 
+// بازخورد کارشناس: Trigger NOTAM (اشاره به اصلاحیهٔ AIP) نباید بحرانی باشد.
+// نمونهٔ واقعی: QFALT «LIMITED ACFT STANDS…» که به‌غلط ۸۶/بحرانی شده بود.
+func TestTriggerNotamNotCritical(t *testing.T) {
+	trig := Analyze(messaging.NotamEvent{QCode: "QFATT", Text: "AIP SUP 12/26 REFERS"})
+	if trig.BaseLevel == LevelCritical || trig.BaseLevel == LevelHigh {
+		t.Errorf("trigger NOTAM نباید بحرانی/بالا باشد (score=%d, level=%s)", trig.BaseScore, trig.BaseLevel)
+	}
+	// در حالی که فرودگاهِ واقعاً بسته باید بحرانی بماند
+	closed := Analyze(messaging.NotamEvent{QCode: "QFALC", Text: "AD CLSD"})
+	if closed.BaseLevel != LevelCritical {
+		t.Errorf("«فرودگاه بسته» باید بحرانی بماند، دریافت %s", closed.BaseLevel)
+	}
+}
+
 func TestScoreOrdering(t *testing.T) {
 	// باند بسته باید مهم‌تر از تاکسی‌وی بسته باشد؛ هر دو از NOTAM لغوشده مهم‌تر
 	rwy := Analyze(messaging.NotamEvent{QCode: "QMRLC", Text: "RWY CLSD"}).BaseScore

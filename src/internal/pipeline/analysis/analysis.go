@@ -15,7 +15,7 @@ import (
 )
 
 // WeightsVersion نسخهٔ جدول وزن‌دهی (با هر تغییر در وزن‌ها افزایش یابد).
-const WeightsVersion = "1.0.0"
+const WeightsVersion = "1.1.0"
 
 // سطوح اهمیت.
 const (
@@ -112,11 +112,14 @@ var conditionDelta = map[string]int{
 	"HW": 10, // Work in progress
 	"HH": 20, // Hazard
 	// اخبار خوب/کاهش اهمیت
-	"CN": -50, // Cancelled
+	"CN": -40, // Cancelled (بازخورد کارشناس: −۵۰ خیلی منفی بود، −۴۰ مناسب)
 	"AO": -18, // Operational
 	"AK": -18, // Resumed
 	"CC": -12, // Completed
 	"HV": -12, // Work completed
+	// Trigger NOTAM: صرفاً به یک اصلاحیهٔ دائمی AIP اشاره می‌کند و برای بریفینگ اطلاعی است.
+	// (بازخورد کارشناس روی QFALT/QFATT: نباید بحرانی باشد.)
+	"TT": -45, // Trigger NOTAM
 }
 
 // نگاشت دسته → فازهای پرواز مرتبط.

@@ -2,6 +2,7 @@ package briefing
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,19 +18,19 @@ import (
 
 // اثرهای عملیاتی استاندارد (چه بلایی سر پرواز می‌آورد، فارغ از اینکه چه تأسیساتی است).
 const (
-	EffectRunwayUnavailable  = "RUNWAY_UNAVAILABLE"
-	EffectAerodromeUnusable  = "AERODROME_UNUSABLE"
-	EffectApproachDegraded   = "APPROACH_DEGRADED"
-	EffectNavDegradation     = "NAV_DEGRADATION"
-	EffectRouteRestriction   = "ROUTE_RESTRICTION"
-	EffectSurfaceCondition   = "SURFACE_CONDITION"
-	EffectServiceLimited     = "SERVICE_LIMITED"
-	EffectATSReduced         = "ATS_REDUCED"
-	EffectObstacleHazard     = "OBSTACLE_HAZARD"
-	EffectRescueLimited      = "RESCUE_LIMITED"
-	EffectMetDegraded        = "MET_DEGRADED"
-	EffectInformationalOnly  = "INFORMATIONAL_ONLY"
-	EffectNotApplicable      = "NOT_APPLICABLE"
+	EffectRunwayUnavailable = "RUNWAY_UNAVAILABLE"
+	EffectAerodromeUnusable = "AERODROME_UNUSABLE"
+	EffectApproachDegraded  = "APPROACH_DEGRADED"
+	EffectNavDegradation    = "NAV_DEGRADATION"
+	EffectRouteRestriction  = "ROUTE_RESTRICTION"
+	EffectSurfaceCondition  = "SURFACE_CONDITION"
+	EffectServiceLimited    = "SERVICE_LIMITED"
+	EffectATSReduced        = "ATS_REDUCED"
+	EffectObstacleHazard    = "OBSTACLE_HAZARD"
+	EffectRescueLimited     = "RESCUE_LIMITED"
+	EffectMetDegraded       = "MET_DEGRADED"
+	EffectInformationalOnly = "INFORMATIONAL_ONLY"
+	EffectNotApplicable     = "NOT_APPLICABLE"
 )
 
 // FlightContext بستر پروازِ لازم برای ارزیابی اثر عملیاتی.
@@ -38,22 +39,78 @@ type FlightContext struct {
 	FlightRules      string         // IFR / VFR
 	RunwayCounts     map[string]int // ICAO فرودگاه → تعداد باند فعال
 
-	// تداخل مسیر/ارتفاع فضای هوایی (E5.6)
-	CruiseAltitudeFt     int          // ۰ = نامعلوم → UNKNOWN_FLIGHT_LEVEL
-	RouteKnown           bool         // آیا کریدور مسیر ساخته شد (مختصات مبدأ/مقصد موجود)؟
-	RouteIntersects      map[int]bool // notamID → area با کریدور مسیر تداخل افقی دارد؟
-	WindowFrom, WindowTo time.Time    // پنجرهٔ زمانی پرواز (برای تداخل زمانی)
+	// تداخل مسیر/ارتفاع فضای هوایی (E5.6+)
+	CruiseAltitudeFt     int // fallback ارتفاع سِیر؛ ۰ = نامعلوم
+	Route                RouteContext
+	WindowFrom, WindowTo time.Time // پنجرهٔ زمانی پرواز (برای تداخل زمانی)
+}
+
+// منابع مسیر و ارتفاع (برای شفافیت و تعیین confidence).
+const (
+	RouteSourceWaypoints   = "WAYPOINTS"
+	RouteSourceGreatCircle = "GREAT_CIRCLE_FALLBACK"
+	RouteSourceUnknown     = "UNKNOWN_ROUTE"
+
+	AltSourceSegmentProfile = "SEGMENT_PROFILE"
+	AltSourceCruiseFixed    = "CRUISE_FIXED"
+	AltSourceNone           = "NONE"
+)
+
+// routeLeg یک بخش هندسی از مسیر (مختصات دو سرِ segment).
+type routeLeg struct {
+	fromSeq, toSeq         int
+	lon1, lat1, lon2, lat2 float64
+}
+
+// legsFromWaypoints از waypointهای معتبر (پس از فیلترِ نامعتبرها و مرتب‌سازی بر اساس ترتیب)
+// بخش‌های مسیر را می‌سازد. اگر کمتر از ۲ نقطهٔ معتبر بماند، nil (fallback).
+func legsFromWaypoints(in model.Waypoints) []routeLeg {
+	wps := make([]model.Waypoint, 0, len(in))
+	for _, w := range in {
+		if w.Valid() {
+			wps = append(wps, w)
+		}
+	}
+	if len(wps) < 2 {
+		return nil
+	}
+	sort.SliceStable(wps, func(i, j int) bool { return wps[i].Sequence < wps[j].Sequence })
+	legs := make([]routeLeg, 0, len(wps)-1)
+	for i := 0; i+1 < len(wps); i++ {
+		legs = append(legs, routeLeg{
+			fromSeq: wps[i].Sequence, toSeq: wps[i+1].Sequence,
+			lon1: wps[i].Lon, lat1: wps[i].Lat, lon2: wps[i+1].Lon, lat2: wps[i+1].Lat,
+		})
+	}
+	return legs
+}
+
+// SegmentBand یک بخش از مسیر با بازهٔ ارتفاعی و فاز آن.
+type SegmentBand struct {
+	FromSeq, ToSeq   int
+	LowerFt, UpperFt int
+	AltKnown         bool
+	AltSource        string
+	Phase            string
+}
+
+// RouteContext مسیر پرواز به‌صورت segmentهای دارای بازهٔ ارتفاعی + نتیجهٔ تقاطع افقی هر segment.
+type RouteContext struct {
+	Source        string        // WAYPOINTS / GREAT_CIRCLE_FALLBACK / UNKNOWN_ROUTE
+	Confidence    string        // HIGH (waypoint کامل) / MEDIUM (great circle)
+	Segments      []SegmentBand // به‌ترتیب مسیر
+	NotamSegments map[int][]int // notamID → ایندکس segmentهایی که افقی تداخل دارند
 }
 
 // وضعیت تداخل هندسی/ارتفاعی/زمانی فضای هوایی (E5.6).
 const (
-	CtxFullIntersection    = "FULL_INTERSECTION"
-	CtxNoIntersection      = "NO_INTERSECTION"
-	CtxHorizontalOnly      = "HORIZONTAL_INTERSECTION_ONLY"
-	CtxVerticalOnly        = "VERTICAL_INTERSECTION_ONLY"
-	CtxUnknownGeometry     = "UNKNOWN_GEOMETRY"
-	CtxUnknownAltitude     = "UNKNOWN_ALTITUDE"
-	CtxUnknownFlightLevel  = "UNKNOWN_FLIGHT_LEVEL"
+	CtxFullIntersection   = "FULL_INTERSECTION"
+	CtxNoIntersection     = "NO_INTERSECTION"
+	CtxHorizontalOnly     = "HORIZONTAL_INTERSECTION_ONLY"
+	CtxVerticalOnly       = "VERTICAL_INTERSECTION_ONLY"
+	CtxUnknownGeometry    = "UNKNOWN_GEOMETRY"
+	CtxUnknownAltitude    = "UNKNOWN_ALTITUDE"
+	CtxUnknownFlightLevel = "UNKNOWN_FLIGHT_LEVEL"
 )
 
 // سطوح اطمینان.
@@ -63,15 +120,28 @@ const (
 	ConfLow    = "LOW"
 )
 
+// MatchedSegment یک segment از مسیر که با محدودهٔ NOTAM تداخل دارد.
+type MatchedSegment struct {
+	FromSequence           int    `json:"fromSequence"`
+	ToSequence             int    `json:"toSequence"`
+	Phase                  string `json:"phase,omitempty"`
+	HorizontalIntersection bool   `json:"horizontalIntersection"`
+	VerticalIntersection   bool   `json:"verticalIntersection"`
+}
+
 // GeoAssessment خروجی توضیح‌پذیرِ ارزیابی تداخل فضای هوایی (برای NOTAMهای Airspace/Restriction).
 type GeoAssessment struct {
-	ContextResult          string   `json:"contextResult"`
-	HorizontalIntersection *bool    `json:"horizontalIntersection"` // nil = نامعلوم
-	VerticalIntersection   *bool    `json:"verticalIntersection"`   // nil = نامعلوم
-	TemporalIntersection   bool     `json:"temporalIntersection"`
-	Confidence             string   `json:"confidence"` // HIGH/MEDIUM/LOW
-	Reasons                []string `json:"reasons"`
-	MissingData            []string `json:"missingData"`
+	ContextResult          string           `json:"contextResult"`
+	HorizontalIntersection *bool            `json:"horizontalIntersection"` // nil = نامعلوم
+	VerticalIntersection   *bool            `json:"verticalIntersection"`   // nil = نامعلوم
+	TemporalIntersection   bool             `json:"temporalIntersection"`
+	Confidence             string           `json:"confidence"` // HIGH/MEDIUM/LOW
+	RouteSource            string           `json:"routeSource"`
+	AltitudeSource         string           `json:"altitudeSource"`
+	MatchedSegments        []MatchedSegment `json:"matchedSegments,omitempty"`
+	EvaluatedSegmentCount  int              `json:"evaluatedSegmentCount"`
+	Reasons                []string         `json:"reasons"`
+	MissingData            []string         `json:"missingData"`
 }
 
 // ImpactResult خروجی ارزیابی اثر عملیاتی.
@@ -142,14 +212,17 @@ const mediumCap = 59
 // IMPACTED فقط با تداخلِ تأییدشده صادر می‌شود. کم‌گویی هم پرهیز می‌شود: موارد نامعلوم پنهان
 // نمی‌شوند (تا سطح MEDIUM قابل‌مشاهده می‌مانند و در missingData علامت می‌خورند).
 func assessAirspace(n model.Notam, ctx FlightContext) ImpactResult {
-	g := &GeoAssessment{TemporalIntersection: true}
+	g := &GeoAssessment{
+		TemporalIntersection:  true,
+		RouteSource:           ctx.Route.Source,
+		EvaluatedSegmentCount: len(ctx.Route.Segments),
+	}
 	base := n.BaseScore + roleBonus(n, model.RoleEnroute)
 
 	// ---- تداخل زمانی (پنجرهٔ پرواز) ----
 	if !ctx.WindowFrom.IsZero() {
-		temporal := temporalOverlap(n, ctx.WindowFrom, ctx.WindowTo)
-		g.TemporalIntersection = temporal
-		if !temporal {
+		if !temporalOverlap(n, ctx.WindowFrom, ctx.WindowTo) {
+			g.TemporalIntersection = false
 			g.ContextResult = CtxNoIntersection
 			g.Confidence = ConfHigh
 			g.Reasons = append(g.Reasons, "زمان پرواز خارج از بازهٔ اعتبار NOTAM است")
@@ -158,40 +231,67 @@ func assessAirspace(n model.Notam, ctx FlightContext) ImpactResult {
 		}
 	}
 
-	hasArea := n.AreaRadiusNM > 0
-	notamAltKnown := n.VerticalKnown
-	flightAltKnown := ctx.CruiseAltitudeFt > 0
-
 	// ---- هندسه یا مسیر نامعلوم → بدون تصمیم قطعی، بدون تشدید ----
-	if !hasArea {
+	if n.AreaRadiusNM <= 0 {
 		g.ContextResult = CtxUnknownGeometry
 		g.Confidence = ConfLow
 		g.MissingData = append(g.MissingData, "notamGeometry")
 		g.Reasons = append(g.Reasons, "هندسهٔ محدودهٔ NOTAM موجود نیست؛ تداخل قابل تأیید نیست")
 		return airspaceResult(minInt(base, mediumCap), EffectRouteRestriction, defaultAction(EffectRouteRestriction), g)
 	}
-	if !ctx.RouteKnown {
+	if ctx.Route.Source == RouteSourceUnknown || len(ctx.Route.Segments) == 0 {
 		g.ContextResult = CtxUnknownGeometry
 		g.Confidence = ConfLow
 		g.MissingData = append(g.MissingData, "flightRoute")
-		g.Reasons = append(g.Reasons, "مختصات مبدأ/مقصد برای ساخت مسیر موجود نیست")
+		g.Reasons = append(g.Reasons, "مسیر پرواز قابل ساخت نیست (مختصات مبدأ/مقصد یا waypoint ناقص)")
 		return airspaceResult(minInt(base, mediumCap), EffectRouteRestriction, defaultAction(EffectRouteRestriction), g)
 	}
 
-	// ---- تداخل افقی (مسیر ↔ محدوده) ----
-	horizontal := ctx.RouteIntersects[n.Id]
+	// ---- تداخل افقی: کدام segmentها با محدوده تداخل دارند؟ ----
+	segIdxs := ctx.Route.NotamSegments[n.Id]
+	horizontal := len(segIdxs) > 0
 	g.HorizontalIntersection = &horizontal
 
-	// اگر مسیر عبور نمی‌کند، ارتفاع بی‌اهمیت است (دروازهٔ افقی قطعی).
 	if !horizontal {
 		g.ContextResult = CtxNoIntersection
-		g.Confidence = ConfMedium // مسیرِ مستقیمِ تقریبی
-		g.Reasons = append(g.Reasons, fmt.Sprintf("مسیر از محدودهٔ NOTAM عبور نمی‌کند (کریدور ~%.0fNM، مسیر مستقیم تقریبی)", routeCorridorNM))
+		g.Confidence = ctx.Route.Confidence // waypoint→HIGH ، great-circle→MEDIUM
+		g.Reasons = append(g.Reasons, routeMissReason(ctx.Route.Source))
 		return airspaceResult(informationalScore(n.BaseScore), EffectNotApplicable,
 			"مسیر پرواز وارد این محدوده نمی‌شود", g)
 	}
 
-	// ---- مسیر عبور می‌کند → بررسی ارتفاع ----
+	// ---- برای هر segmentِ متقاطع، تداخل عمودی را بسنج ----
+	notamAltKnown := n.VerticalKnown
+	var matched []MatchedSegment
+	anyFull := false
+	anyFlightAltUnknown := false
+	altSource := AltSourceNone
+
+	for _, si := range segIdxs {
+		if si < 0 || si >= len(ctx.Route.Segments) {
+			continue
+		}
+		seg := ctx.Route.Segments[si]
+		ms := MatchedSegment{FromSequence: seg.FromSeq, ToSequence: seg.ToSeq, Phase: seg.Phase, HorizontalIntersection: true}
+		if seg.AltSource != AltSourceNone {
+			altSource = seg.AltSource
+		}
+		if notamAltKnown && seg.AltKnown {
+			// هم‌پوشانی بازهٔ ارتفاعیِ segment با بازهٔ NOTAM
+			v := seg.LowerFt <= n.UpperFt && seg.UpperFt >= n.LowerFt
+			ms.VerticalIntersection = v
+			if v {
+				anyFull = true
+			}
+		} else if notamAltKnown && !seg.AltKnown {
+			anyFlightAltUnknown = true
+		}
+		matched = append(matched, ms)
+	}
+	g.AltitudeSource = altSource
+	g.MatchedSegments = matched
+
+	// ---- ارتفاع NOTAM نامعلوم → بدون تشدید ----
 	if !notamAltKnown {
 		g.ContextResult = CtxUnknownAltitude
 		g.Confidence = ConfLow
@@ -200,34 +300,58 @@ func assessAirspace(n model.Notam, ctx FlightContext) ImpactResult {
 		return airspaceResult(minInt(base, mediumCap), EffectRouteRestriction,
 			"تداخل افقی؛ حدود ارتفاعی نامشخص — دستی بررسی شود", g)
 	}
-	if !flightAltKnown {
-		g.ContextResult = CtxUnknownFlightLevel
-		g.Confidence = ConfLow
-		g.MissingData = append(g.MissingData, "flightLevel")
-		g.Reasons = append(g.Reasons, "تداخل افقی هست ولی ارتفاع سِیر پرواز ثبت نشده")
-		return airspaceResult(minInt(base, mediumCap), EffectRouteRestriction,
-			"تداخل افقی؛ ارتفاع پرواز را وارد کنید تا تداخل عمودی سنجیده شود", g)
-	}
 
-	vertical := ctx.CruiseAltitudeFt >= n.LowerFt && ctx.CruiseAltitudeFt <= n.UpperFt
-	g.VerticalIntersection = &vertical
-	g.Confidence = ConfMedium // افقی تقریبی، عمودی/زمانی دقیق
-
-	if vertical {
+	// ---- تداخل کامل: حداقل یک segment با هر سه شرط (افقی+عمودی+زمانی) ----
+	if anyFull {
+		vTrue := true
+		g.VerticalIntersection = &vTrue
 		g.ContextResult = CtxFullIntersection
-		g.Reasons = append(g.Reasons, fmt.Sprintf("تداخل افقی، عمودی (%dft در بازهٔ %d→%dft) و زمانی تأیید شد",
-			ctx.CruiseAltitudeFt, n.LowerFt, n.UpperFt))
-		// IMPACTED: امتیاز کامل حفظ می‌شود (تداخل واقعی)
+		g.Confidence = ctx.Route.Confidence // عمودی/زمانی دقیق؛ افقی تعیین‌کنندهٔ confidence
+		g.Reasons = append(g.Reasons, fullIntersectionReason(matched, n))
 		return airspaceResult(analysis.Clamp(base), EffectRouteRestriction,
 			"محدودیت فضای هوایی روی مسیر و ارتفاع این پرواز — بررسی و هماهنگی لازم", g)
 	}
 
-	// تداخل افقی هست ولی ارتفاع خارج از بازه
+	// ---- تداخل افقی بود ولی ارتفاع پروازِ بعضی segmentها نامعلوم ----
+	if anyFlightAltUnknown {
+		g.ContextResult = CtxUnknownFlightLevel
+		g.Confidence = ConfLow
+		g.MissingData = append(g.MissingData, "flightLevel")
+		g.Reasons = append(g.Reasons, "تداخل افقی هست ولی ارتفاع پروازِ بخشی از مسیر ثبت نشده")
+		return airspaceResult(minInt(base, mediumCap), EffectRouteRestriction,
+			"تداخل افقی؛ ارتفاع پرواز را کامل کنید تا تداخل عمودی سنجیده شود", g)
+	}
+
+	// ---- افقی بله، عمودی خیر در همهٔ segmentها ----
+	vFalse := false
+	g.VerticalIntersection = &vFalse
 	g.ContextResult = CtxHorizontalOnly
-	g.Reasons = append(g.Reasons, fmt.Sprintf("مسیر عبور می‌کند ولی ارتفاع پرواز (%dft) خارج از بازهٔ NOTAM (%d→%dft) است",
-		ctx.CruiseAltitudeFt, n.LowerFt, n.UpperFt))
+	g.Confidence = ctx.Route.Confidence
+	g.Reasons = append(g.Reasons, fmt.Sprintf("مسیر عبور می‌کند ولی در هیچ بخشی ارتفاع با بازهٔ NOTAM (%d→%dft) هم‌پوشانی ندارد",
+		n.LowerFt, n.UpperFt))
 	return airspaceResult(informationalScore(n.BaseScore), EffectNotApplicable,
 		"مسیر عبور می‌کند ولی در ارتفاع دیگری", g)
+}
+
+func routeMissReason(source string) string {
+	if source == RouteSourceWaypoints {
+		return "مسیرِ واقعی (waypoint) از محدودهٔ NOTAM عبور نمی‌کند"
+	}
+	return fmt.Sprintf("مسیر از محدودهٔ NOTAM عبور نمی‌کند (کریدور ~%.0fNM، مسیر مستقیم تقریبی)", routeCorridorNM)
+}
+
+func fullIntersectionReason(matched []MatchedSegment, n model.Notam) string {
+	for _, m := range matched {
+		if m.VerticalIntersection {
+			phase := m.Phase
+			if phase == "" {
+				phase = model.PhaseUnknown
+			}
+			return fmt.Sprintf("Airspace intersects route segment %d→%d during %s within FL band %d→%dft",
+				m.FromSequence, m.ToSequence, phase, n.LowerFt, n.UpperFt)
+		}
+	}
+	return "تداخل افقی، عمودی و زمانی تأیید شد"
 }
 
 func airspaceResult(score int, effect, action string, g *GeoAssessment) ImpactResult {

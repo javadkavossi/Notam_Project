@@ -30,9 +30,12 @@ type FlightPlan struct {
 	AircraftCategory string `gorm:"size:12;default:JET"` // JET / TURBOPROP / PISTON
 	FlightRules      string `gorm:"size:4;default:IFR"`  // IFR / VFR
 
-	// ارتفاع سِیر برای تداخل عمودی با فضای هوایی (E5.6). ۰ = نامعلوم → UNKNOWN_FLIGHT_LEVEL.
-	// (پروفایل ارتفاعی چندبخشی در نسخهٔ بعد؛ فعلاً ارتفاع سِیر واحد.)
+	// ارتفاع سِیر (fallback وقتی پروفایل نیست). ۰ = نامعلوم → UNKNOWN_FLIGHT_LEVEL.
 	CruiseAltitudeFt int
+
+	// مسیر واقعی و پروفایل ارتفاعی segment-based (E5.6+) — backward-compatible؛ nil = fallback.
+	RouteWaypoints       Waypoints  `gorm:"type:TEXT"`
+	RouteAltitudeProfile AltProfile `gorm:"type:TEXT"`
 
 	Note string `gorm:"size:200"`
 }

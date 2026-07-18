@@ -102,8 +102,8 @@ func TestContextualScore_Clamped(t *testing.T) {
 func TestBuild_GroupsAndCritical(t *testing.T) {
 	fp := testFlight()
 	notams := []model.Notam{
-		notam(1, "OIIE", qcode.CatRunway, 90),   // مقصد، بحرانی
-		notam(2, "OIII", qcode.CatTaxiway, 40),  // مبدأ
+		notam(1, "OIIE", qcode.CatRunway, 90),    // مقصد، بحرانی
+		notam(2, "OIII", qcode.CatTaxiway, 40),   // مبدأ
 		notam(3, "OISS", qcode.CatAerodrome, 30), // الترنت
 		{BaseModel: model.BaseModel{Id: 4}, AffectedFIR: "OIIX", Category: qcode.CatAirspace, BaseScore: 50},
 	}

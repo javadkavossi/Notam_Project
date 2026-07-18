@@ -34,7 +34,10 @@ type FlightRequest struct {
 	AircraftCategory string   `json:"aircraftCategory"` // JET/TURBOPROP/PISTON (پیش‌فرض JET)
 	FlightRules      string   `json:"flightRules"`      // IFR/VFR (پیش‌فرض IFR)
 	CruiseAltitudeFt int      `json:"cruiseAltitudeFt"` // ارتفاع سِیر (فوت)؛ ۰ = نامعلوم
-	Note             string   `json:"note"`
+	// مسیر واقعی و پروفایل ارتفاعی (اختیاری؛ اگر نبود، مسیر مستقیم و ارتفاع سِیر استفاده می‌شود)
+	RouteWaypoints       []model.Waypoint   `json:"routeWaypoints"`
+	RouteAltitudeProfile []model.AltSegment `json:"routeAltitudeProfile"`
+	Note                 string             `json:"note"`
 }
 
 // toModel بدنه را به مدل تبدیل و اعتبارسنجی می‌کند.
@@ -71,10 +74,12 @@ func (r FlightRequest) toModel(username string) (model.FlightPlan, error) {
 		ETD:              etd.UTC(),
 		ETA:              eta.UTC(),
 		BufferMinutes:    buf,
-		AircraftCategory: acft,
-		FlightRules:      rules,
-		CruiseAltitudeFt: r.CruiseAltitudeFt,
-		Note:             r.Note,
+		AircraftCategory:     acft,
+		FlightRules:          rules,
+		CruiseAltitudeFt:     r.CruiseAltitudeFt,
+		RouteWaypoints:       model.Waypoints(r.RouteWaypoints),
+		RouteAltitudeProfile: model.AltProfile(r.RouteAltitudeProfile),
+		Note:                 r.Note,
 	}, nil
 }
 

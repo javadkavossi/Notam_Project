@@ -29,16 +29,26 @@ func airspaceNotam(id int, hasArea bool, lowerFt, upperFt int, vertKnown bool) m
 	return n
 }
 
-// بستر پرواز کامل: مسیر معلوم، ارتفاع سِیر معلوم، پنجرهٔ زمانی معلوم.
+// بستر پرواز کامل با مسیرِ تک‌segment (fallback دایره‌الوسط) و ارتفاع سِیر ثابت.
 func fullCtx(intersects bool, notamID int, cruiseFt int) FlightContext {
+	seg := SegmentBand{FromSeq: 0, ToSeq: 1, Phase: model.PhaseCruise, AltSource: AltSourceNone}
+	if cruiseFt > 0 {
+		seg.LowerFt, seg.UpperFt, seg.AltKnown, seg.AltSource = cruiseFt, cruiseFt, true, AltSourceCruiseFixed
+	}
+	notamSegs := map[int][]int{}
+	if intersects {
+		notamSegs[notamID] = []int{0}
+	}
 	return FlightContext{
 		FlightRules:      model.RulesIFR,
 		AircraftCategory: model.AircraftJet,
 		CruiseAltitudeFt: cruiseFt,
-		RouteKnown:       true,
-		RouteIntersects:  map[int]bool{notamID: intersects},
 		WindowFrom:       time.Date(2026, 7, 20, 6, 0, 0, 0, time.UTC),
 		WindowTo:         time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC),
+		Route: RouteContext{
+			Source: RouteSourceGreatCircle, Confidence: ConfMedium,
+			Segments: []SegmentBand{seg}, NotamSegments: notamSegs,
+		},
 	}
 }
 
@@ -201,7 +211,7 @@ func TestAirspace_UnknownsNeverEscalate(t *testing.T) {
 		ctx  FlightContext
 	}{
 		{"no-geometry", airspaceNotam(20, false, 0, 40000, true), fullCtx(true, 20, 35000)},
-		{"no-route", airspaceNotam(21, true, 0, 40000, true), FlightContext{RouteKnown: false, WindowFrom: time.Date(2026, 7, 20, 6, 0, 0, 0, time.UTC), WindowTo: time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)}},
+		{"no-route", airspaceNotam(21, true, 0, 40000, true), FlightContext{Route: RouteContext{Source: RouteSourceUnknown, Confidence: ConfLow}, WindowFrom: time.Date(2026, 7, 20, 6, 0, 0, 0, time.UTC), WindowTo: time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)}},
 		{"no-notam-alt", airspaceNotam(22, true, 0, 0, false), fullCtx(true, 22, 35000)},
 		{"no-flight-level", airspaceNotam(23, true, 0, 40000, true), fullCtx(true, 23, 0)},
 	}

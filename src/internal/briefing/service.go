@@ -1,6 +1,7 @@
 package briefing
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/hossein-repo/BaseProject/data/db"
@@ -27,7 +28,7 @@ func (s *Service) Build(fp model.FlightPlan) (Briefing, error) {
 		return Briefing{}, err
 	}
 	ctx := s.flightContext(fp)
-	ctx.RouteKnown, ctx.RouteIntersects = s.routeIntersections(fp, notams)
+	ctx.Route = s.buildRoute(fp, notams)
 	return Build(fp, notams, ctx), nil
 }
 
@@ -56,50 +57,105 @@ func (s *Service) flightContext(fp model.FlightPlan) FlightContext {
 	}
 }
 
-// routeCorridorNM نصف‌عرضِ کریدور مسیر (NM). چون فعلاً مسیر تقریبِ دایره‌الوسط مبدأ→مقصد است
-// (بدون waypoint واقعی)، عرضِ سخاوتمندانه انتخاب می‌شود تا تداخل واقعی از دست نرود (پرهیز از کم‌گویی).
+// routeCorridorNM نصف‌عرضِ کریدور مسیر (NM). عرضِ سخاوتمندانه تا تداخل واقعی از دست نرود (پرهیز از کم‌گویی).
 const routeCorridorNM = 25.0
 
-// routeIntersections برای NOTAMهای دارای هندسه تعیین می‌کند کدام‌ها با کریدور مسیر تداخل افقی دارند.
-// از PostGIS و دادهٔ واقعی استفاده می‌کند؛ اگر مختصات مبدأ/مقصد نبود، routeKnown=false.
-func (s *Service) routeIntersections(fp model.FlightPlan, notams []model.Notam) (bool, map[int]bool) {
-	out := map[int]bool{}
+// buildRoute مسیر پرواز را می‌سازد: اولویت با waypointهای واقعی؛ سپس دایره‌الوسط مبدأ→مقصد؛ وگرنه UNKNOWN.
+// سپس بازهٔ ارتفاعی هر segment و segmentهای متقاطع با هر NOTAM را تعیین می‌کند.
+func (s *Service) buildRoute(fp model.FlightPlan, notams []model.Notam) RouteContext {
+	legs, source, confidence := s.routeLegs(fp)
+	rc := RouteContext{Source: source, Confidence: confidence}
+	if source == RouteSourceUnknown || len(legs) == 0 {
+		return rc
+	}
+
+	// بازهٔ ارتفاعی هر segment: از پروفایل، سپس ارتفاع سِیر، وگرنه نامعلوم.
+	rc.Segments = make([]SegmentBand, len(legs))
+	for i, lg := range legs {
+		rc.Segments[i] = segmentBand(lg.fromSeq, lg.toSeq, fp)
+	}
+
+	// تقاطع افقی per-segment (یک کوئری PostGIS).
+	rc.NotamSegments = s.segmentIntersections(legs, notams)
+	return rc
+}
+
+// routeLegs بخش‌های هندسیِ مسیر + منبع + confidence افقی را برمی‌گرداند.
+func (s *Service) routeLegs(fp model.FlightPlan) ([]routeLeg, string, string) {
+	// ۱) waypointهای معتبر
+	if legs := legsFromWaypoints(fp.RouteWaypoints); len(legs) > 0 {
+		return legs, RouteSourceWaypoints, ConfHigh
+	}
+	// ۲) دایره‌الوسط مبدأ→مقصد (fallback)
 	adep, _ := s.ref.FindAirport(fp.ADEP)
 	ades, _ := s.ref.FindAirport(fp.ADES)
-	if adep == nil || ades == nil || (adep.Lat == 0 && adep.Lon == 0) || (ades.Lat == 0 && ades.Lon == 0) {
-		return false, out // مسیر نامعلوم
+	if adep != nil && ades != nil && !(adep.Lat == 0 && adep.Lon == 0) && !(ades.Lat == 0 && ades.Lon == 0) {
+		return []routeLeg{{fromSeq: 0, toSeq: 1, lon1: adep.Lon, lat1: adep.Lat, lon2: ades.Lon, lat2: ades.Lat}},
+			RouteSourceGreatCircle, ConfMedium
 	}
+	// ۳) نامعلوم
+	return nil, RouteSourceUnknown, ConfLow
+}
+
+// segmentBand بازهٔ ارتفاعی یک segment را از پروفایل (اولویت) یا ارتفاع سِیر تعیین می‌کند.
+func segmentBand(fromSeq, toSeq int, fp model.FlightPlan) SegmentBand {
+	b := SegmentBand{FromSeq: fromSeq, ToSeq: toSeq, Phase: model.PhaseUnknown}
+	for _, p := range fp.RouteAltitudeProfile {
+		if p.FromSequence <= fromSeq && p.ToSequence >= toSeq {
+			b.LowerFt, b.UpperFt, b.AltKnown = p.LowerFt, p.UpperFt, true
+			b.AltSource = AltSourceSegmentProfile
+			if p.Phase != "" {
+				b.Phase = p.Phase
+			}
+			return b
+		}
+	}
+	if fp.CruiseAltitudeFt > 0 {
+		b.LowerFt, b.UpperFt, b.AltKnown = fp.CruiseAltitudeFt, fp.CruiseAltitudeFt, true
+		b.AltSource = AltSourceCruiseFixed
+		b.Phase = model.PhaseCruise
+		return b
+	}
+	b.AltSource = AltSourceNone
+	return b
+}
+
+// segmentIntersections با یک کوئری PostGIS تعیین می‌کند هر NOTAM با کدام segmentها تداخل افقی دارد.
+func (s *Service) segmentIntersections(legs []routeLeg, notams []model.Notam) map[int][]int {
+	out := map[int][]int{}
 	ids := make([]int, 0, len(notams))
 	for _, n := range notams {
 		if n.AreaRadiusNM > 0 {
 			ids = append(ids, n.Id)
 		}
 	}
-	if len(ids) == 0 {
-		return true, out
+	if len(ids) == 0 || len(legs) == 0 {
+		return out
 	}
-	// کریدور: بافرِ geodesic دور خط مبدأ→مقصد (geography → عبور از دایره‌الوسط).
+	// VALUES از مختصاتِ کنترل‌شده (float) ساخته می‌شود؛ بدون رشتهٔ کاربر → بدون ریسک injection.
+	vals := make([]string, len(legs))
+	for i, lg := range legs {
+		vals[i] = fmt.Sprintf("(%d,%g::float8,%g::float8,%g::float8,%g::float8)", i, lg.lon1, lg.lat1, lg.lon2, lg.lat2)
+	}
 	corridorMeters := routeCorridorNM * 1852.0
-	var hitIDs []int
-	err := s.db.Raw(`
-		WITH corr AS (
-		  SELECT ST_Buffer(
-		    ST_SetSRID(ST_MakeLine(ST_MakePoint(?, ?), ST_MakePoint(?, ?)), 4326)::geography,
-		    ?
-		  )::geometry AS g
-		)
-		SELECT n.id FROM notams n, corr
-		WHERE n.id IN ? AND n.area IS NOT NULL AND ST_Intersects(n.area, corr.g)`,
-		adep.Lon, adep.Lat, ades.Lon, ades.Lat, corridorMeters, ids,
-	).Scan(&hitIDs).Error
-	if err != nil {
-		// در صورت خطای فضایی، مسیر را «نامعلوم» اعلام کن (نه «بدون تداخل») تا کم‌گویی رخ ندهد.
-		return false, out
+	q := `WITH seg(idx,lon1,lat1,lon2,lat2) AS (VALUES ` + strings.Join(vals, ",") + `)
+	      SELECT n.id AS notam_id, seg.idx AS seg_idx
+	      FROM notams n JOIN seg
+	        ON ST_Intersects(n.area,
+	           ST_Buffer(ST_SetSRID(ST_MakeLine(ST_MakePoint(seg.lon1,seg.lat1),ST_MakePoint(seg.lon2,seg.lat2)),4326)::geography, ?)::geometry)
+	      WHERE n.id IN ? AND n.area IS NOT NULL`
+	type row struct {
+		NotamID int
+		SegIdx  int
 	}
-	for _, id := range hitIDs {
-		out[id] = true
+	var rows []row
+	if err := s.db.Raw(q, corridorMeters, ids).Scan(&rows).Error; err != nil {
+		return out // خطای فضایی → بدون تقاطع (assessAirspace آن را UNKNOWN می‌بیند اگر مسیر خالی شود)
 	}
-	return true, out
+	for _, r := range rows {
+		out[r.NotamID] = append(out[r.NotamID], r.SegIdx)
+	}
+	return out
 }
 
 // matchNotams تطبیق مکانی (فرودگاه‌های پرواز یا FIRهای مسیر) و زمانی (هم‌پوشانی با پنجرهٔ پرواز).

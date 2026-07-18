@@ -38,15 +38,15 @@ type ItemNotam struct {
 
 // Item یک ردیف بریفینگ: NOTAM + نقش آن در پرواز + امتیاز کانتکستی.
 type Item struct {
-	Notam           ItemNotam `json:"notam"`
-	Role            string    `json:"role"`            // ADEP/ADES/ALTN/ENROUTE
-	RoleICAO        string    `json:"roleIcao"`        // فرودگاه/FIR مربوطه
-	ContextualScore int       `json:"contextualScore"` // امتیاز نهاییِ وابسته به این پرواز
-	ContextualLevel string    `json:"contextualLevel"`
-	Effect          string         `json:"effect"`         // اثر عملیاتی (RUNWAY_UNAVAILABLE/…)
-	Action          string         `json:"action"`         // اقدام پیشنهادی برای خلبان/دیسپچر
-	Geo             *GeoAssessment `json:"geo,omitempty"`  // ارزیابی تداخل فضای هوایی (E5.6)
-	MatchReason     string         `json:"matchReason"`    // چرا این NOTAM انتخاب شد
+	Notam           ItemNotam      `json:"notam"`
+	Role            string         `json:"role"`            // ADEP/ADES/ALTN/ENROUTE
+	RoleICAO        string         `json:"roleIcao"`        // فرودگاه/FIR مربوطه
+	ContextualScore int            `json:"contextualScore"` // امتیاز نهاییِ وابسته به این پرواز
+	ContextualLevel string         `json:"contextualLevel"`
+	Effect          string         `json:"effect"`        // اثر عملیاتی (RUNWAY_UNAVAILABLE/…)
+	Action          string         `json:"action"`        // اقدام پیشنهادی برای خلبان/دیسپچر
+	Geo             *GeoAssessment `json:"geo,omitempty"` // ارزیابی تداخل فضای هوایی (E5.6)
+	MatchReason     string         `json:"matchReason"`   // چرا این NOTAM انتخاب شد
 }
 
 // Group گروهی از ردیف‌ها (بر اساس نقش).
@@ -58,20 +58,20 @@ type Group struct {
 
 // Briefing خروجی نهایی.
 type Briefing struct {
-	FlightID   int      `json:"flightId,omitempty"`
-	ADEP       string   `json:"adep"`
-	ADES       string   `json:"ades"`
-	Alternates []string `json:"alternates,omitempty"`
+	FlightID   int       `json:"flightId,omitempty"`
+	ADEP       string    `json:"adep"`
+	ADES       string    `json:"ades"`
+	Alternates []string  `json:"alternates,omitempty"`
 	WindowFrom time.Time `json:"windowFrom"`
 	WindowTo   time.Time `json:"windowTo"`
 
 	// خلاصهٔ بحرانی: مهم‌ترین موارد یک‌جا و بالای بریفینگ
 	Critical []Item `json:"critical"`
 
-	Groups     []Group        `json:"groups"`
-	TotalCount int            `json:"totalCount"`
+	Groups        []Group        `json:"groups"`
+	TotalCount    int            `json:"totalCount"`
 	CountsByLevel map[string]int `json:"countsByLevel"`
-	GeneratedAt time.Time     `json:"generatedAt"`
+	GeneratedAt   time.Time      `json:"generatedAt"`
 }
 
 // دسته‌هایی که به فاز ورود/فرود مربوط‌اند.
@@ -170,7 +170,6 @@ func classifyRole(fp model.FlightPlan, n model.Notam) (role, icao string) {
 	}
 	return model.RoleEnroute, up(n.AffectedFIR)
 }
-
 
 // matchReason توضیح انسانی اینکه چرا این NOTAM در بریفینگ آمده (شفافیت/ممیزی).
 func matchReason(n model.Notam, role, icao string) string {

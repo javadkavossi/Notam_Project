@@ -36,7 +36,7 @@ func TestGoldenAnalyze(t *testing.T) {
 			name:      "ILS unserviceable (QICAS)",
 			ev:        messaging.NotamEvent{QCode: "QICAS", Text: "ILS RWY 29R U/S"},
 			wantCat:   qcode.CatILS,
-			wantLevel: LevelHigh, // 50 + 22 AS + 6 ILS_OUT = 78 → HIGH
+			wantLevel: LevelCritical, // v1.2.0: سقف ILS=55 + AS 22 + ILS_OUT 6 = 83 → CRITICAL (بالقوه)
 			wantTag:   TagILSOut,
 		},
 		{
@@ -65,16 +65,16 @@ func TestGoldenAnalyze(t *testing.T) {
 			wantLevel: LevelHigh, // 55 + 12
 		},
 		{
-			name:      "obstacle crane (QOBCE)",
-			ev:        messaging.NotamEvent{QCode: "QOBCE", Text: "CRANE ERECTED"},
-			wantCat:   qcode.CatObstacle,
-			wantTag:   TagObstacle,
+			name:    "obstacle crane (QOBCE)",
+			ev:      messaging.NotamEvent{QCode: "QOBCE", Text: "CRANE ERECTED"},
+			wantCat: qcode.CatObstacle,
+			wantTag: TagObstacle,
 		},
 		{
-			name:      "FICON via text fallback (no Q-code)",
-			ev:        messaging.NotamEvent{Text: "RWY 29 FICON 5/5/5 WET"},
-			wantCat:   qcode.CatRunway,
-			wantTag:   TagFICON,
+			name:    "FICON via text fallback (no Q-code)",
+			ev:      messaging.NotamEvent{Text: "RWY 29 FICON 5/5/5 WET"},
+			wantCat: qcode.CatRunway,
+			wantTag: TagFICON,
 		},
 		{
 			name:      "runway closed via text fallback",
@@ -144,24 +144,112 @@ func TestUnknownSubjectDoesNotEscalate(t *testing.T) {
 // قبلاً fallback حرف اولِ F همه را به AERODROME(78) می‌برد و «سوخت موجود نیست» یا
 // «سنسور باد خراب» با امتیاز ۱۰۰ بحرانی می‌شد — گرگ‌گویی که اعتماد را از بین می‌برد.
 func TestFacilityNotScoredAsAerodrome(t *testing.T) {
-	adClosed := Analyze(messaging.NotamEvent{QCode: "QFALC", Text: "AD CLSD"})
 	fuel := Analyze(messaging.NotamEvent{QCode: "QFUAU", Text: "100LL NOT AVBL"})
 	windIndicator := Analyze(messaging.NotamEvent{QCode: "QFWAS", Text: "SFC WIND DISPLAY IN TWR U/S"})
 
-	if adClosed.BaseLevel != LevelCritical {
-		t.Errorf("«فرودگاه بسته» باید بحرانی بماند، دریافت %s", adClosed.BaseLevel)
-	}
+	// تفکیک دسته‌ها درست است: سوخت=SERVICE، سنسور باد=MET، نه AERODROME.
 	if fuel.Category == qcode.CatAerodrome {
 		t.Error("«سوخت» نباید دستهٔ AERODROME بگیرد")
 	}
-	if fuel.BaseLevel == LevelCritical {
-		t.Errorf("«سوخت موجود نیست» نباید بحرانی باشد (score=%d)", fuel.BaseScore)
+	if fuel.Category != qcode.CatService {
+		t.Errorf("«سوخت» باید SERVICE باشد، دریافت %s", fuel.Category)
 	}
-	if windIndicator.BaseLevel == LevelCritical {
-		t.Errorf("«نمایشگر باد خراب» نباید بحرانی باشد (score=%d)", windIndicator.BaseScore)
+	if windIndicator.Category != qcode.CatMet {
+		t.Errorf("«سنسور باد» باید MET باشد، دریافت %s", windIndicator.Category)
 	}
+	// این‌ها Base Potential دارند و در corpus حکم نهایی نمی‌گیرند (CONTEXT_REQUIRED).
+	if windIndicator.CorpusStatus != CorpusContextRequired {
+		t.Errorf("سنسور باد باید CONTEXT_REQUIRED باشد (نه حکم بحرانی نهایی)، دریافت %s", windIndicator.CorpusStatus)
+	}
+	// سوخت باید از فرودگاهِ واقعاً بسته کم‌اهمیت‌تر باشد (سقف SERVICE < AERODROME).
+	adClosed := Analyze(messaging.NotamEvent{QCode: "QFALC", Text: "AD CLSD"})
 	if fuel.BaseScore >= adClosed.BaseScore {
 		t.Errorf("سوخت (%d) نباید ≥ فرودگاه بسته (%d)", fuel.BaseScore, adClosed.BaseScore)
+	}
+}
+
+// بازتولید: نسخهٔ 1.1.0 باید همان اعداد قبلی را بدهد (baseline reproducible).
+func TestScoringVersionReproducibility(t *testing.T) {
+	ev := messaging.NotamEvent{QCode: "QFWAS", Text: "SFC WIND DISPLAY U/S"}
+
+	v11 := AnalyzeWith(ev, ConfigByVersion("1.1.0"))
+	if v11.ScoringVersion != "1.1.0" {
+		t.Errorf("scoringVersion=%s، انتظار 1.1.0", v11.ScoringVersion)
+	}
+	if v11.BaseScore != 67 { // v1.1.0: MET 45 + AS 22 = 67
+		t.Errorf("v1.1.0 سنسور باد باید ۶۷ باشد (baseline)، دریافت %d", v11.BaseScore)
+	}
+	v12 := AnalyzeWith(ev, ConfigByVersion("1.2.0"))
+	if v12.BaseScore != 92 { // v1.2.0: سقف MET 70 + AS 22 = 92
+		t.Errorf("v1.2.0 سنسور باد باید ۹۲ باشد، دریافت %d", v12.BaseScore)
+	}
+	// همان ورودی، دو نسخه، دو نتیجهٔ متفاوت ولی قابل‌بازتولید
+	if v11.BaseScore == v12.BaseScore {
+		t.Error("نسخه‌های مختلف باید نتایج متفاوت بدهند")
+	}
+}
+
+// تست #3: سقف دسته بدون context — Base Potential = ceiling + condition + tags.
+func TestCategoryCeilingWithoutContext(t *testing.T) {
+	// QMRLC: سقف RUNWAY 70 + LC 30 + RWY_CLOSED 10 = 110→100
+	r := Analyze(messaging.NotamEvent{QCode: "QMRLC", Text: "RWY CLSD"})
+	ceiling := Current.CategoryBase(r.Category)
+	if ceiling != 70 {
+		t.Errorf("سقف RUNWAY باید ۷۰ باشد، دریافت %d", ceiling)
+	}
+	if r.BaseScore != 100 {
+		t.Errorf("Base Potential باید ۱۰۰ باشد (۷۰+۳۰+۱۰ clamp)، دریافت %d", r.BaseScore)
+	}
+	// بدون شرط بدکننده، امتیاز نباید از سقف فراتر رود
+	plain := Analyze(messaging.NotamEvent{QCode: "QNVCH", Text: "VOR RECALIBRATED"}) // NV nav + CH changed
+	if plain.BaseScore > Current.CategoryBase(plain.Category)+30 {
+		t.Errorf("امتیاز نباید بی‌دلیل از سقف فراتر رود: %d", plain.BaseScore)
+	}
+}
+
+// تست #11: NOTAM لغوشده امتیاز پایین می‌گیرد و corpus آن INFORMATIONAL_ONLY است.
+func TestCancelledNotam(t *testing.T) {
+	r := Analyze(messaging.NotamEvent{QCode: "QMRCN", Text: "A0044/26 CANCELLED"})
+	if r.BaseLevel == LevelCritical || r.BaseLevel == LevelHigh {
+		t.Errorf("لغو نباید HIGH/CRITICAL باشد، دریافت %s (%d)", r.BaseLevel, r.BaseScore)
+	}
+	if r.CorpusStatus != CorpusInformationalOnly {
+		t.Errorf("لغو باید INFORMATIONAL_ONLY باشد، دریافت %s", r.CorpusStatus)
+	}
+	// تأیید تعدیل کارشناس: CN = −۴۰
+	if Current.ConditionDelta("CN") != -40 {
+		t.Errorf("تعدیل لغو باید −۴۰ باشد، دریافت %d", Current.ConditionDelta("CN"))
+	}
+}
+
+// تست #17: تعیین‌پذیری (پایهٔ idempotency backfill) — ورودی یکسان، خروجی یکسان.
+func TestAnalyzeDeterministic(t *testing.T) {
+	ev := messaging.NotamEvent{QCode: "QRRCA", Text: "RESTRICTED AREA ACTIVE", AffectedFIR: "LRBB"}
+	a := Analyze(ev)
+	b := Analyze(ev)
+	if a.BaseScore != b.BaseScore || a.BaseLevel != b.BaseLevel || a.CorpusStatus != b.CorpusStatus || a.ScoringVersion != b.ScoringVersion {
+		t.Errorf("تحلیل باید تعیین‌پذیر باشد: %+v vs %+v", a, b)
+	}
+}
+
+// اصل ایمنی: corpus (بدون FlightPlan) هرگز حکم نهاییِ CRITICAL نمی‌دهد — فقط Base Potential + status.
+func TestCorpusNeverFinalCritical(t *testing.T) {
+	// یک NOTAM با Base Potential بالا
+	met := Analyze(messaging.NotamEvent{QCode: "QFWAS", Text: "WIND SENSOR U/S"})
+	if met.BaseScore < 80 {
+		t.Fatalf("این تست به Base Potential بالا نیاز دارد، دریافت %d", met.BaseScore)
+	}
+	// در corpus، وضعیت باید CONTEXT_REQUIRED باشد (نه حکم قطعی)
+	if met.CorpusStatus == "" || met.CorpusStatus == CorpusBaseOnly {
+		t.Errorf("Base Potential بالا به‌تنهایی نباید حکم قطعی بدهد؛ status=%s", met.CorpusStatus)
+	}
+	// Trigger هرگز به‌خاطر دسته HIGH نمی‌شود
+	trig := Analyze(messaging.NotamEvent{QCode: "QRRTT", Text: "TRIGGER"})
+	if trig.BaseLevel == LevelHigh || trig.BaseLevel == LevelCritical {
+		t.Errorf("Trigger نباید HIGH/CRITICAL شود، دریافت %s (%d)", trig.BaseLevel, trig.BaseScore)
+	}
+	if trig.CorpusStatus != CorpusInformationalOnly {
+		t.Errorf("Trigger باید INFORMATIONAL_ONLY باشد، دریافت %s", trig.CorpusStatus)
 	}
 }
 

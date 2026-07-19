@@ -21,13 +21,13 @@ type NotamEvent struct {
 	LowerLimit        string `xml:"hasMember>Event>timeSlice>EventTimeSlice>textNOTAM>NOTAM>lowerLimit"`
 	UpperLimit        string `xml:"hasMember>Event>timeSlice>EventTimeSlice>textNOTAM>NOTAM>upperLimit"`
 	// Q-code واقعی ICAO. در فید FAA/AIXM نام این عنصر selectionCode است (تگ qcode وجود ندارد).
-	QCode    string `xml:"hasMember>Event>timeSlice>EventTimeSlice>textNOTAM>NOTAM>selectionCode"`
-	Traffic  string `xml:"hasMember>Event>timeSlice>EventTimeSlice>textNOTAM>NOTAM>traffic"`  // IV/I/V
-	Purpose  string `xml:"hasMember>Event>timeSlice>EventTimeSlice>textNOTAM>NOTAM>purpose"`  // NBO/BO/M...
-	Scope    string `xml:"hasMember>Event>timeSlice>EventTimeSlice>textNOTAM>NOTAM>scope"`    // A/E/W
-	Schedule string `xml:"hasMember>Event>timeSlice>EventTimeSlice>textNOTAM>NOTAM>schedule"`
-	ICAOLocation      string `xml:"hasMember>Event>timeSlice>EventTimeSlice>extension>EventExtension>icaoLocation"`
-	AirportName       string `xml:"hasMember>Event>timeSlice>EventTimeSlice>extension>EventExtension>airportname"`
+	QCode        string `xml:"hasMember>Event>timeSlice>EventTimeSlice>textNOTAM>NOTAM>selectionCode"`
+	Traffic      string `xml:"hasMember>Event>timeSlice>EventTimeSlice>textNOTAM>NOTAM>traffic"` // IV/I/V
+	Purpose      string `xml:"hasMember>Event>timeSlice>EventTimeSlice>textNOTAM>NOTAM>purpose"` // NBO/BO/M...
+	Scope        string `xml:"hasMember>Event>timeSlice>EventTimeSlice>textNOTAM>NOTAM>scope"`   // A/E/W
+	Schedule     string `xml:"hasMember>Event>timeSlice>EventTimeSlice>textNOTAM>NOTAM>schedule"`
+	ICAOLocation string `xml:"hasMember>Event>timeSlice>EventTimeSlice>extension>EventExtension>icaoLocation"`
+	AirportName  string `xml:"hasMember>Event>timeSlice>EventTimeSlice>extension>EventExtension>airportname"`
 
 	// هندسه و ارتفاع ساختاریافتهٔ فضای هوایی (خط Q) — برای تداخل مسیر/ارتفاع (E5.6).
 	Coordinates string `xml:"hasMember>Event>timeSlice>EventTimeSlice>textNOTAM>NOTAM>coordinates"` // مرکز مثل 5609N04020E

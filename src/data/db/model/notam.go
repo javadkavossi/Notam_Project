@@ -17,20 +17,20 @@ type Notam struct {
 	Source string `gorm:"size:20;index"`
 
 	// ICAO Standard Fields (برای خروجی استاندارد خلبان)
-	SeriesNumber string `gorm:"size:20;index"`   // 0046/26, A3910/25
-	EventType    string `gorm:"size:4;index"`    // N, R, C (new, replacement, cancel)
-	QLine        string `gorm:"size:80"`         // Q) FIR/FIR/type/traffic/scope/...
-	LocationICAO string `gorm:"size:8;index"`    // A) Location indicator
-	EffectiveStart time.Time `gorm:"type:TIMESTAMP with time zone;index"`
+	SeriesNumber   string     `gorm:"size:20;index"` // 0046/26, A3910/25
+	EventType      string     `gorm:"size:4;index"`  // N, R, C (new, replacement, cancel)
+	QLine          string     `gorm:"size:80"`       // Q) FIR/FIR/type/traffic/scope/...
+	LocationICAO   string     `gorm:"size:8;index"`  // A) Location indicator
+	EffectiveStart time.Time  `gorm:"type:TIMESTAMP with time zone;index"`
 	EffectiveEnd   *time.Time `gorm:"type:TIMESTAMP with time zone"`
-	Schedule       string `gorm:"size:200"`      // D) زمان‌بندی اختیاری
-	PlainText      string `gorm:"type:TEXT;not null"` // E) متن اصلی NOTAM
-	LowerLimit     string `gorm:"size:20"`       // F) حد پایین ارتفاع
-	UpperLimit     string `gorm:"size:20"`       // G) حد بالای ارتفاع
+	Schedule       string     `gorm:"size:200"`           // D) زمان‌بندی اختیاری
+	PlainText      string     `gorm:"type:TEXT;not null"` // E) متن اصلی NOTAM
+	LowerLimit     string     `gorm:"size:20"`            // F) حد پایین ارتفاع
+	UpperLimit     string     `gorm:"size:20"`            // G) حد بالای ارتفاع
 
 	// فیلدهای FAA/SWIM اضافی
-	AirportName string `gorm:"size:150"`
-	AffectedFIR string `gorm:"size:8;index"`
+	AirportName string     `gorm:"size:150"`
+	AffectedFIR string     `gorm:"size:8;index"`
 	IssuedAt    *time.Time `gorm:"type:TIMESTAMP with time zone"`
 
 	// متن فرمت‌شده ICAO کامل (برای export به Jeppesen)
@@ -47,17 +47,19 @@ type Notam struct {
 	Category     string      `gorm:"size:20;index"` // RUNWAY/NAVIGATION/AIRSPACE/…
 	FlightPhases StringSlice `gorm:"type:TEXT"`     // DEPARTURE/ENROUTE/APPROACH/…
 	Tags         StringSlice `gorm:"type:TEXT"`     // FICON/RWY_CLOSED/…
-	BaseScore    int         `gorm:"index"`         // ۰..۱۰۰ مستقل از پرواز
-	BaseLevel    string      `gorm:"size:10;index"` // CRITICAL/HIGH/MEDIUM/LOW/INFO
-	WeightsVer   string      `gorm:"size:12"`       // نسخهٔ جدول وزن‌دهی (audit)
+	BaseScore    int         `gorm:"index"`         // Base Potential (سقف بالقوه؛ نه امتیاز نهایی)
+	BaseLevel    string      `gorm:"size:10;index"` // بندِ بالقوه
+	WeightsVer   string      `gorm:"size:12"`       // ScoringVersion (برای بازتولید)
+	CorpusStatus string      `gorm:"size:20;index"` // BASE_ONLY/CONTEXT_REQUIRED/INFORMATIONAL_ONLY
+	Confidence   string      `gorm:"size:10"`       // اطمینان تحلیل پایه: HIGH/MEDIUM/LOW
 
 	// ---- هندسه و ارتفاع فضای هوایی (E5.6) — از خط Q؛ ستون area (PostGIS) از این‌ها ساخته می‌شود ----
-	AreaLat      float64 // مرکز
-	AreaLon      float64
-	AreaRadiusNM float64 // شعاع NM؛ >۰ یعنی هندسه معلوم است
-	LowerFt      int     // حد پایین ارتفاع (فوت)
-	UpperFt      int     // حد بالا ارتفاع (فوت)
-	VerticalKnown bool   // آیا حدود ارتفاعی معلوم است
+	AreaLat       float64 // مرکز
+	AreaLon       float64
+	AreaRadiusNM  float64 // شعاع NM؛ >۰ یعنی هندسه معلوم است
+	LowerFt       int     // حد پایین ارتفاع (فوت)
+	UpperFt       int     // حد بالا ارتفاع (فوت)
+	VerticalKnown bool    // آیا حدود ارتفاعی معلوم است
 
 	// ارجاع اختیاری (بدون FK - NOTAMها از فرودگاه‌های مختلف FAA می‌آیند)
 	AirportICAO string `gorm:"size:8;index"` // کد ICAO محل - لزوماً در جدول airports نیست

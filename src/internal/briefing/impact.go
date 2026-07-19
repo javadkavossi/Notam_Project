@@ -140,6 +140,8 @@ type GeoAssessment struct {
 	AltitudeSource         string           `json:"altitudeSource"`
 	MatchedSegments        []MatchedSegment `json:"matchedSegments,omitempty"`
 	EvaluatedSegmentCount  int              `json:"evaluatedSegmentCount"`
+	RouteCorridorNM        float64          `json:"routeCorridorNm"` // از config (ثبت در خروجی برای شفافیت)
+	ScoringVersion         string           `json:"scoringVersion"`
 	Reasons                []string         `json:"reasons"`
 	MissingData            []string         `json:"missingData"`
 }
@@ -203,8 +205,8 @@ func result(score int, effect, action string) ImpactResult {
 	return ImpactResult{Score: score, Level: analysis.LevelFor(score), Effect: effect, Action: action}
 }
 
-// medianCap سقفِ MEDIUM؛ برای موارد نامعلوم تا هرگز به‌طور خودکار HIGH/CRITICAL نشوند.
-const mediumCap = 59
+// mediumCap سقفِ MEDIUM برای موارد نامعلوم (از config)؛ تا هرگز به‌طور خودکار HIGH/CRITICAL نشوند.
+func mediumCap() int { return analysis.Current.UnknownCap }
 
 // assessAirspace تداخل افقی/عمودی/زمانی یک NOTAM فضای هوایی را با پرواز ارزیابی می‌کند (E5.6).
 //
@@ -216,6 +218,8 @@ func assessAirspace(n model.Notam, ctx FlightContext) ImpactResult {
 		TemporalIntersection:  true,
 		RouteSource:           ctx.Route.Source,
 		EvaluatedSegmentCount: len(ctx.Route.Segments),
+		RouteCorridorNM:       analysis.Current.RouteCorridorNM,
+		ScoringVersion:        analysis.Current.Version,
 	}
 	base := n.BaseScore + roleBonus(n, model.RoleEnroute)
 
@@ -237,14 +241,14 @@ func assessAirspace(n model.Notam, ctx FlightContext) ImpactResult {
 		g.Confidence = ConfLow
 		g.MissingData = append(g.MissingData, "notamGeometry")
 		g.Reasons = append(g.Reasons, "هندسهٔ محدودهٔ NOTAM موجود نیست؛ تداخل قابل تأیید نیست")
-		return airspaceResult(minInt(base, mediumCap), EffectRouteRestriction, defaultAction(EffectRouteRestriction), g)
+		return airspaceResult(minInt(base, mediumCap()), EffectRouteRestriction, defaultAction(EffectRouteRestriction), g)
 	}
 	if ctx.Route.Source == RouteSourceUnknown || len(ctx.Route.Segments) == 0 {
 		g.ContextResult = CtxUnknownGeometry
 		g.Confidence = ConfLow
 		g.MissingData = append(g.MissingData, "flightRoute")
 		g.Reasons = append(g.Reasons, "مسیر پرواز قابل ساخت نیست (مختصات مبدأ/مقصد یا waypoint ناقص)")
-		return airspaceResult(minInt(base, mediumCap), EffectRouteRestriction, defaultAction(EffectRouteRestriction), g)
+		return airspaceResult(minInt(base, mediumCap()), EffectRouteRestriction, defaultAction(EffectRouteRestriction), g)
 	}
 
 	// ---- تداخل افقی: کدام segmentها با محدوده تداخل دارند؟ ----
@@ -297,7 +301,7 @@ func assessAirspace(n model.Notam, ctx FlightContext) ImpactResult {
 		g.Confidence = ConfLow
 		g.MissingData = append(g.MissingData, "notamAltitude")
 		g.Reasons = append(g.Reasons, "تداخل افقی هست ولی حدود ارتفاعی NOTAM نامشخص است")
-		return airspaceResult(minInt(base, mediumCap), EffectRouteRestriction,
+		return airspaceResult(minInt(base, mediumCap()), EffectRouteRestriction,
 			"تداخل افقی؛ حدود ارتفاعی نامشخص — دستی بررسی شود", g)
 	}
 
@@ -318,7 +322,7 @@ func assessAirspace(n model.Notam, ctx FlightContext) ImpactResult {
 		g.Confidence = ConfLow
 		g.MissingData = append(g.MissingData, "flightLevel")
 		g.Reasons = append(g.Reasons, "تداخل افقی هست ولی ارتفاع پروازِ بخشی از مسیر ثبت نشده")
-		return airspaceResult(minInt(base, mediumCap), EffectRouteRestriction,
+		return airspaceResult(minInt(base, mediumCap()), EffectRouteRestriction,
 			"تداخل افقی؛ ارتفاع پرواز را کامل کنید تا تداخل عمودی سنجیده شود", g)
 	}
 
@@ -337,7 +341,7 @@ func routeMissReason(source string) string {
 	if source == RouteSourceWaypoints {
 		return "مسیرِ واقعی (waypoint) از محدودهٔ NOTAM عبور نمی‌کند"
 	}
-	return fmt.Sprintf("مسیر از محدودهٔ NOTAM عبور نمی‌کند (کریدور ~%.0fNM، مسیر مستقیم تقریبی)", routeCorridorNM)
+	return fmt.Sprintf("مسیر از محدودهٔ NOTAM عبور نمی‌کند (کریدور ~%.0fNM، مسیر مستقیم تقریبی)", analysis.Current.RouteCorridorNM)
 }
 
 func fullIntersectionReason(matched []MatchedSegment, n model.Notam) string {
@@ -519,10 +523,11 @@ func isClosed(n model.Notam) bool {
 }
 
 // informationalScore امتیاز موارد بی‌ربط را پایین می‌آورد ولی صفر نمی‌کند (هیچ NOTAMی بی‌صاحب نماند).
+// سقف از config (NotApplicableCap).
 func informationalScore(base int) int {
 	s := base / 4
-	if s > 20 {
-		s = 20
+	if cap := analysis.Current.NotApplicableCap; s > cap {
+		s = cap
 	}
 	return s
 }

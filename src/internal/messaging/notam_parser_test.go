@@ -24,10 +24,10 @@ func TestBuildHumanReadableText_New(t *testing.T) {
 	got := BuildHumanReadableText(ev)
 
 	wantContains := []string{
-		"A0046/26 NOTAMN",              // خط اول: سریال + نوع
-		"Q) OIIX/QMRLC/IV/NBO/A///",    // بند Q از دادهٔ واقعی منبع
-		"A) OIII",                      // مکان
-		"B) 26021506",                  // پیشوند قرن حذف شده
+		"A0046/26 NOTAMN",           // خط اول: سریال + نوع
+		"Q) OIIX/QMRLC/IV/NBO/A///", // بند Q از دادهٔ واقعی منبع
+		"A) OIII",                   // مکان
+		"B) 26021506",               // پیشوند قرن حذف شده
 		"C) 26021523",
 		"E) RWY 11L/29R CLSD DUE WIP", // متن اصلی
 	}
@@ -93,13 +93,13 @@ func TestParseNotamXML_SelectionCodeIsQCode(t *testing.T) {
 
 func TestBuildHumanReadableText_Cancel(t *testing.T) {
 	ev := NotamEvent{
-		Series:      "A",
-		Number:      50,
-		Year:        "2026",
-		EventType:   "C",
-		AffectedFIR: "OIIX",
+		Series:       "A",
+		Number:       50,
+		Year:         "2026",
+		EventType:    "C",
+		AffectedFIR:  "OIIX",
 		ICAOLocation: "OIII",
-		Text:        "A0046/26",
+		Text:         "A0046/26",
 	}
 	got := BuildHumanReadableText(ev)
 

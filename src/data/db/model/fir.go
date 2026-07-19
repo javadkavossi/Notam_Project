@@ -22,10 +22,10 @@ func (FIR) TableName() string { return "firs" }
 // RefDatasetVersion نسخه و checksum هر دیتاست مرجع برای نسخه‌بندی و تشخیص تغییر (E7-4).
 type RefDatasetVersion struct {
 	BaseModel
-	Dataset   string `gorm:"size:40;index;not null"` // airports/runways/navaids/firs
-	Checksum  string `gorm:"size:64"`                // sha256 منبع
-	RowCount  int
-	Note      string `gorm:"size:200"`
+	Dataset  string `gorm:"size:40;index;not null"` // airports/runways/navaids/firs
+	Checksum string `gorm:"size:64"`                // sha256 منبع
+	RowCount int
+	Note     string `gorm:"size:200"`
 }
 
 func (RefDatasetVersion) TableName() string { return "ref_dataset_versions" }

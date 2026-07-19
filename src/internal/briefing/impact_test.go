@@ -76,6 +76,39 @@ func TestImpact_FuelRelevance(t *testing.T) {
 	}
 }
 
+// تست #16: CRITICAL نهایی فقط با context تأییدشده صادر می‌شود، نه صرفاً Base Potential بالا.
+func TestCriticalRequiresConfirmedContext(t *testing.T) {
+	// باند بسته با Base Potential 100، ولی در فرودگاه چندباند → نباید CRITICAL بماند
+	rwy := model.Notam{
+		LocationICAO: "LTFM", Category: qcode.CatRunway, QCondition: "LC",
+		Tags: model.StringSlice{analysis.TagRwyClosed}, PlainText: "RWY 18 CLSD", BaseScore: 100,
+	}
+	multi := EvaluateImpact(rwy, model.RoleADES, "LTFM", FlightContext{RunwayCounts: map[string]int{"LTFM": 5}})
+	if multi.Level == analysis.LevelCritical {
+		t.Errorf("باند بسته در فرودگاه ۵باند نباید CRITICAL بماند (%d)", multi.Score)
+	}
+	// همان با تک‌باند → context تأییدشده → CRITICAL مجاز
+	single := EvaluateImpact(rwy, model.RoleADES, "LTFM", FlightContext{RunwayCounts: map[string]int{"LTFM": 1}})
+	if single.Level != analysis.LevelCritical {
+		t.Errorf("باند بسته در تک‌باند باید CRITICAL شود (%d)", single.Score)
+	}
+	// airspace با Base Potential بالا ولی خارج از مسیر → نباید CRITICAL شود
+	air := model.Notam{
+		Category: qcode.CatRestriction, BaseScore: 90, AreaRadiusNM: 20, VerticalKnown: true, UpperFt: 40000,
+	}
+	off := EvaluateImpact(air, model.RoleEnroute, "OIIX", FlightContext{
+		Route: RouteContext{Source: RouteSourceWaypoints, Confidence: ConfHigh,
+			Segments: []SegmentBand{seg2(0, 1, 35000, 35000)}, NotamSegments: map[int][]int{}},
+	})
+	if off.Level == analysis.LevelCritical || off.Level == analysis.LevelHigh {
+		t.Errorf("airspace خارج از مسیر نباید CRITICAL/HIGH بماند (%s %d)", off.Level, off.Score)
+	}
+}
+
+func seg2(from, to, lower, upper int) SegmentBand {
+	return SegmentBand{FromSeq: from, ToSeq: to, LowerFt: lower, UpperFt: upper, AltKnown: true, AltSource: AltSourceCruiseFixed, Phase: model.PhaseCruise}
+}
+
 func TestImpact_OperationalEffectMapping(t *testing.T) {
 	cases := []struct {
 		n    model.Notam

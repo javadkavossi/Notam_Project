@@ -232,7 +232,9 @@ func (r *NotamRepository) eventToNotam(ev messaging.NotamEvent, notamMsg messagi
 		Tags:         model.StringSlice(an.Tags),
 		BaseScore:    an.BaseScore,
 		BaseLevel:    an.BaseLevel,
-		WeightsVer:   analysis.WeightsVersion,
+		WeightsVer:   an.ScoringVersion,
+		CorpusStatus: an.CorpusStatus,
+		Confidence:   an.Confidence,
 
 		AreaLat:       geo.Lat,
 		AreaLon:       geo.Lon,
@@ -256,12 +258,12 @@ func (r *NotamRepository) PopulateArea(id int) {
 }
 
 type locationFromXML struct {
-	icaoLocation         string
+	icaoLocation          string
 	locationIndicatorICAO string
-	airportName          string
-	affectedFIR          string
-	location             string
-	designator           string
+	airportName           string
+	affectedFIR           string
+	location              string
+	designator            string
 }
 
 func extractLocationFromXML(raw string) locationFromXML {
@@ -316,22 +318,22 @@ func seriesNumber(ev messaging.NotamEvent) string {
 
 // الگوهای مختلف NOTAM series: A1477/26, 0046/26, M0137/26, F123/26, C1234/26
 var (
-	seriesRegex1 = regexp.MustCompile(`\b([A-Z]\d{3,4}/\d{2})\b`) // حرف + ۳ یا ۴ رقم
-	seriesRegex2 = regexp.MustCompile(`\b(\d{4}/\d{2})\b`)        // ۴ رقم خالص
-	seriesRegex3 = regexp.MustCompile(`\b([A-Z0-9]{4,6}/\d{2})\b`) // ترکیبی گسترده
-	xmlSeriesRe    = regexp.MustCompile(`<[a-zA-Z:]*series[^>]*>([^<]+)</[a-zA-Z:]*series>`)
-	xmlNumberRe    = regexp.MustCompile(`<event:number[^>]*>(\d+)</event:number>`) // دقیقاً event:number تا sequenceNumber اشتباه نشود
-	xmlYearRe      = regexp.MustCompile(`<event:year[^>]*>(\d{4})</event:year>`)
+	seriesRegex1    = regexp.MustCompile(`\b([A-Z]\d{3,4}/\d{2})\b`)  // حرف + ۳ یا ۴ رقم
+	seriesRegex2    = regexp.MustCompile(`\b(\d{4}/\d{2})\b`)         // ۴ رقم خالص
+	seriesRegex3    = regexp.MustCompile(`\b([A-Z0-9]{4,6}/\d{2})\b`) // ترکیبی گسترده
+	xmlSeriesRe     = regexp.MustCompile(`<[a-zA-Z:]*series[^>]*>([^<]+)</[a-zA-Z:]*series>`)
+	xmlNumberRe     = regexp.MustCompile(`<event:number[^>]*>(\d+)</event:number>`) // دقیقاً event:number تا sequenceNumber اشتباه نشود
+	xmlYearRe       = regexp.MustCompile(`<event:year[^>]*>(\d{4})</event:year>`)
 	xmlXoverNotamRe = regexp.MustCompile(`<[a-zA-Z:]*xovernotamID[^>]*>([^<]+)</[a-zA-Z:]*xovernotamID>`)
-	simpleTextRe   = regexp.MustCompile(`![A-Z0-9]+\s+(\d{2})/(\d+)`)
+	simpleTextRe    = regexp.MustCompile(`![A-Z0-9]+\s+(\d{2})/(\d+)`)
 	// استخراج airport/ICAO از XML
-	xmlIcaoLocationRe    = regexp.MustCompile(`<[a-zA-Z:]*icaoLocation[^>]*>([^<]+)</[a-zA-Z:]*icaoLocation>`)
+	xmlIcaoLocationRe      = regexp.MustCompile(`<[a-zA-Z:]*icaoLocation[^>]*>([^<]+)</[a-zA-Z:]*icaoLocation>`)
 	xmlLocationIndicatorRe = regexp.MustCompile(`<[a-zA-Z:]*locationIndicatorICAO[^>]*>([^<]+)</[a-zA-Z:]*locationIndicatorICAO>`)
-	xmlAirportNameRe     = regexp.MustCompile(`<[a-zA-Z:]*airportname[^>]*>([^<]+)</[a-zA-Z:]*airportname>`)
-	xmlAirportName2Re    = regexp.MustCompile(`<[a-zA-Z:]*name[^>]*>([^<]+)</[a-zA-Z:]*name>`) // aixm:name در AirportHeliport
-	xmlAffectedFIRRe     = regexp.MustCompile(`<event:affectedFIR[^>]*>([^<]+)</event:affectedFIR>`)
-	xmlLocationRe        = regexp.MustCompile(`<event:location[^>]*>([^<]+)</event:location>`)
-	xmlDesignatorRe      = regexp.MustCompile(`<[a-zA-Z:]*designator[^>]*>([^<]+)</[a-zA-Z:]*designator>`)
+	xmlAirportNameRe       = regexp.MustCompile(`<[a-zA-Z:]*airportname[^>]*>([^<]+)</[a-zA-Z:]*airportname>`)
+	xmlAirportName2Re      = regexp.MustCompile(`<[a-zA-Z:]*name[^>]*>([^<]+)</[a-zA-Z:]*name>`) // aixm:name در AirportHeliport
+	xmlAffectedFIRRe       = regexp.MustCompile(`<event:affectedFIR[^>]*>([^<]+)</event:affectedFIR>`)
+	xmlLocationRe          = regexp.MustCompile(`<event:location[^>]*>([^<]+)</event:location>`)
+	xmlDesignatorRe        = regexp.MustCompile(`<[a-zA-Z:]*designator[^>]*>([^<]+)</[a-zA-Z:]*designator>`)
 )
 
 func extractSeriesFromText(humanText, plainText string) string {

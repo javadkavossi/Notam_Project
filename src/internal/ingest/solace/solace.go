@@ -40,7 +40,7 @@ type Adapter struct {
 
 	outage ingest.OutageSink
 
-	mu       sync.Mutex
+	mu        sync.Mutex
 	downSince time.Time // زمان شروع قطعی جاری (صفر یعنی متصل)
 }
 

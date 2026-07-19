@@ -6,6 +6,7 @@ import (
 
 	"github.com/hossein-repo/BaseProject/data/db"
 	"github.com/hossein-repo/BaseProject/data/db/model"
+	"github.com/hossein-repo/BaseProject/internal/pipeline/analysis"
 	"github.com/hossein-repo/BaseProject/internal/reference"
 	"gorm.io/gorm"
 )
@@ -56,9 +57,6 @@ func (s *Service) flightContext(fp model.FlightPlan) FlightContext {
 		WindowTo:         to,
 	}
 }
-
-// routeCorridorNM نصف‌عرضِ کریدور مسیر (NM). عرضِ سخاوتمندانه تا تداخل واقعی از دست نرود (پرهیز از کم‌گویی).
-const routeCorridorNM = 25.0
 
 // buildRoute مسیر پرواز را می‌سازد: اولویت با waypointهای واقعی؛ سپس دایره‌الوسط مبدأ→مقصد؛ وگرنه UNKNOWN.
 // سپس بازهٔ ارتفاعی هر segment و segmentهای متقاطع با هر NOTAM را تعیین می‌کند.
@@ -137,7 +135,7 @@ func (s *Service) segmentIntersections(legs []routeLeg, notams []model.Notam) ma
 	for i, lg := range legs {
 		vals[i] = fmt.Sprintf("(%d,%g::float8,%g::float8,%g::float8,%g::float8)", i, lg.lon1, lg.lat1, lg.lon2, lg.lat2)
 	}
-	corridorMeters := routeCorridorNM * 1852.0
+	corridorMeters := analysis.Current.RouteCorridorNM * 1852.0
 	q := `WITH seg(idx,lon1,lat1,lon2,lat2) AS (VALUES ` + strings.Join(vals, ",") + `)
 	      SELECT n.id AS notam_id, seg.idx AS seg_idx
 	      FROM notams n JOIN seg

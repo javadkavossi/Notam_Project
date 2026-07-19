@@ -1,7 +1,8 @@
 // Package qcode دیکد کد Q استاندارد ICAO را انجام می‌دهد (E3-1).
 //
 // ساختار Q-code: Q + دو حرف «موضوع» (subject) + دو حرف «وضعیت» (condition). مثال: QMRLC
-//   MR = Runway (موضوع) ، LC = Closed (وضعیت)  →  «باند بسته»
+//
+//	MR = Runway (موضوع) ، LC = Closed (وضعیت)  →  «باند بسته»
 //
 // دیکد کاملاً deterministic و قابل‌ممیزی است (بدون LLM) — پایهٔ دقتِ سیستم.
 // مرجع: ICAO Doc 8126 / Annex 15.
@@ -22,8 +23,8 @@ const (
 	// عمداً از RUNWAY جدا است: نسبت‌دادن «باند» به یک کد ناشناخته باعث تشدید
 	// خطرناکِ اهمیت می‌شود (مثلاً بستن تاکسی‌وی → «باند بسته»).
 	CatMovementArea = "MOVEMENT_AREA"
-	CatLighting = "LIGHTING"
-	CatILS      = "ILS"
+	CatLighting     = "LIGHTING"
+	CatILS          = "ILS"
 	// CatService تسهیلات/خدمات فرودگاهی (سوخت، اکسیژن، گمرک، برف‌روبی…).
 	// عمداً از AERODROME جدا است: «سوخت موجود نیست» با «فرودگاه بسته» یکی نیست.
 	CatService = "SERVICE"
@@ -32,7 +33,7 @@ const (
 	// CatMet خدمات هواشناسی و اندازه‌گیری (RVR، باد، سقف ابر، اصطکاک).
 	CatMet = "MET"
 	// CatATS خدمات ترافیک هوایی (برج، نزدیکی، رادار، اطلاعات پرواز).
-	CatATS = "ATS"
+	CatATS         = "ATS"
 	CatNavigation  = "NAVIGATION"
 	CatGNSS        = "GNSS"
 	CatComms       = "COMMS"

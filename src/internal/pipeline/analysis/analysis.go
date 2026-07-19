@@ -14,8 +14,22 @@ import (
 	"github.com/hossein-repo/BaseProject/internal/pipeline/qcode"
 )
 
-// WeightsVersion نسخهٔ جدول وزن‌دهی (با هر تغییر در وزن‌ها افزایش یابد).
-const WeightsVersion = "1.1.0"
+// WeightsVersion نسخهٔ فعالِ امتیازدهی (از config؛ برای بازتولید در خروجی ذخیره می‌شود).
+var WeightsVersion = Current.Version
+
+// وضعیت corpus (بدون FlightPlan): آیا این NOTAM به‌تنهایی قابل‌قضاوت است یا نیاز به بستر پرواز دارد.
+const (
+	CorpusBaseOnly          = "BASE_ONLY"          // امتیاز پایه تقریباً نهایی است (مثل بستن کامل فرودگاه)
+	CorpusContextRequired   = "CONTEXT_REQUIRED"   // امتیاز نهایی نیازمند بستر پرواز است
+	CorpusInformationalOnly = "INFORMATIONAL_ONLY" // Trigger/Cancelled/اطلاعی
+)
+
+// سطوح اطمینانِ تحلیل پایه.
+const (
+	ConfidenceHigh   = "HIGH"
+	ConfidenceMedium = "MEDIUM"
+	ConfidenceLow    = "LOW"
+)
 
 // سطوح اهمیت.
 const (
@@ -55,102 +69,52 @@ type Result struct {
 	ConditionLabel string
 	Phases         []string
 	Tags           []string
-	BaseScore      int
-	BaseLevel      string
-	FromText       bool // آیا از fallback متنی به‌دست آمد (Q-code نبود)
-}
+	BaseScore      int    // Base Potential (سقف بالقوه؛ نه امتیاز نهایی)
+	BaseLevel      string // بندِ بالقوه (نه priority نهایی)
+	FromText       bool   // آیا از fallback متنی به‌دست آمد (Q-code نبود)
 
-// وزن پایهٔ هر دسته (0..~80).
-var categoryBase = map[string]int{
-	qcode.CatAerodrome:   78,
-	qcode.CatRunway:      70,
-	qcode.CatILS:         50,
-	qcode.CatGNSS:        50,
-	qcode.CatNavigation:  45,
-	qcode.CatLighting:    40,
-	qcode.CatTaxiway:      38,
-	qcode.CatMovementArea: 35, // موضوع دقیق ناشناخته در گروه M — عمداً پایین‌تر از باند
-	qcode.CatApron:        25,
-	qcode.CatAirspace:    55,
-	qcode.CatRestriction: 55,
-	qcode.CatATS:         55, // برج/نزدیکی/رادار در دسترس نیست
-	qcode.CatRescue:      62, // نبودِ RFFS عملاً محدودکنندهٔ عملیات تجاری است
-	qcode.CatProcedure:   50,
-	qcode.CatMet:         45, // RVR/باد/سقف — برای عملیات کم‌دید مهم
-	qcode.CatComms:       40,
-	qcode.CatWarning:     45,
-	qcode.CatObstacle:    45,
-	qcode.CatService:     28, // سوخت/اکسیژن/گمرک — مهم ولی نه در حد بستن فرودگاه
-	qcode.CatOther:       20,
-}
-
-// تعدیل امتیاز بر اساس وضعیت (۲ حرف).
-var conditionDelta = map[string]int{
-	// بستن/غیرقابل‌استفاده — بیشترین اهمیت
-	"LC": 30, // Closed
-	"LP": 27, // Prohibited
-	"LD": 26, // Unsafe
-	"AS": 22, // Unserviceable
-	"AU": 22, // Not available
-	"AW": 20, // Withdrawn
-	"LI": 20, // Closed to IFR
-	"LV": 10, // Closed to VFR
-	"LN": 12, // Closed to night ops
-	// محدودیت‌های جزئی
-	"LT": 8,  // Limited to
-	"LL": 8,  // Usable limited length/width
-	"CP": 10, // Reduced power
-	"CG": 12, // Downgraded
-	"CM": 10, // Displaced
-	"CL": 10, // Realigned
-	"LS": 8,  // Subject to interruption
-	// تغییرات فعال/خطر
-	"CA": 12, // Activated
-	"CE": 12, // Erected
-	"CS": 8,  // Installed
-	"CT": 15, // On test, do not use
-	"HW": 10, // Work in progress
-	"HH": 20, // Hazard
-	// اخبار خوب/کاهش اهمیت
-	"CN": -40, // Cancelled (بازخورد کارشناس: −۵۰ خیلی منفی بود، −۴۰ مناسب)
-	"AO": -18, // Operational
-	"AK": -18, // Resumed
-	"CC": -12, // Completed
-	"HV": -12, // Work completed
-	// Trigger NOTAM: صرفاً به یک اصلاحیهٔ دائمی AIP اشاره می‌کند و برای بریفینگ اطلاعی است.
-	// (بازخورد کارشناس روی QFALT/QFATT: نباید بحرانی باشد.)
-	"TT": -45, // Trigger NOTAM
+	// کالیبراسیون (E3-calibration)
+	ScoringVersion string // نسخهٔ config که این نتیجه با آن ساخته شد (برای بازتولید)
+	CorpusStatus   string // BASE_ONLY / CONTEXT_REQUIRED / INFORMATIONAL_ONLY
+	Confidence     string // HIGH (Q-code شناسایی‌شده) / MEDIUM (متن) / LOW (حدس)
+	MissingData    []string
 }
 
 // نگاشت دسته → فازهای پرواز مرتبط.
 var categoryPhases = map[string][]string{
-	qcode.CatAerodrome:   {PhaseDeparture, PhaseLanding, PhaseGround},
+	qcode.CatAerodrome:    {PhaseDeparture, PhaseLanding, PhaseGround},
 	qcode.CatRunway:       {PhaseDeparture, PhaseLanding},
 	qcode.CatTaxiway:      {PhaseGround},
 	qcode.CatMovementArea: {PhaseGround},
-	qcode.CatApron:       {PhaseGround},
-	qcode.CatLighting:    {PhaseApproach, PhaseLanding},
-	qcode.CatILS:         {PhaseApproach, PhaseLanding},
-	qcode.CatNavigation:  {PhaseEnroute, PhaseApproach},
-	qcode.CatGNSS:        {PhaseEnroute, PhaseApproach},
-	qcode.CatComms:       {PhaseEnroute, PhaseApproach},
-	qcode.CatATS:         {PhaseDeparture, PhaseEnroute, PhaseApproach},
-	qcode.CatRescue:      {PhaseDeparture, PhaseLanding},
-	qcode.CatMet:         {PhaseApproach, PhaseLanding},
-	qcode.CatService:     {PhaseGround},
-	qcode.CatAirspace:    {PhaseEnroute},
-	qcode.CatRestriction: {PhaseEnroute},
-	qcode.CatProcedure:   {PhaseDeparture, PhaseApproach},
-	qcode.CatWarning:     {PhaseEnroute},
-	qcode.CatObstacle:    {PhaseApproach, PhaseDeparture},
-	qcode.CatOther:       {},
+	qcode.CatApron:        {PhaseGround},
+	qcode.CatLighting:     {PhaseApproach, PhaseLanding},
+	qcode.CatILS:          {PhaseApproach, PhaseLanding},
+	qcode.CatNavigation:   {PhaseEnroute, PhaseApproach},
+	qcode.CatGNSS:         {PhaseEnroute, PhaseApproach},
+	qcode.CatComms:        {PhaseEnroute, PhaseApproach},
+	qcode.CatATS:          {PhaseDeparture, PhaseEnroute, PhaseApproach},
+	qcode.CatRescue:       {PhaseDeparture, PhaseLanding},
+	qcode.CatMet:          {PhaseApproach, PhaseLanding},
+	qcode.CatService:      {PhaseGround},
+	qcode.CatAirspace:     {PhaseEnroute},
+	qcode.CatRestriction:  {PhaseEnroute},
+	qcode.CatProcedure:    {PhaseDeparture, PhaseApproach},
+	qcode.CatWarning:      {PhaseEnroute},
+	qcode.CatObstacle:     {PhaseApproach, PhaseDeparture},
+	qcode.CatOther:        {},
 }
 
-// Analyze یک NOTAM را تحلیل می‌کند.
-func Analyze(ev messaging.NotamEvent) Result {
+// Analyze یک NOTAM را با نسخهٔ فعالِ config تحلیل می‌کند.
+func Analyze(ev messaging.NotamEvent) Result { return AnalyzeWith(ev, Current) }
+
+// AnalyzeWith یک NOTAM را با یک نسخهٔ مشخصِ config تحلیل می‌کند (برای بازتولید نتایج قدیمی).
+func AnalyzeWith(ev messaging.NotamEvent, cfg *ScoringConfig) Result {
+	if cfg == nil {
+		cfg = Current
+	}
 	code := qcode.Extract(ev.QCode, ev.HumanReadableText, ev.Text)
 	if code == "" {
-		return analyzeFromText(ev)
+		return finalizeCorpus(analyzeFromText(ev, cfg), cfg)
 	}
 	d := qcode.Decode(code)
 
@@ -164,25 +128,63 @@ func Analyze(ev messaging.NotamEvent) Result {
 		Phases:         categoryPhases[d.Category],
 	}
 
-	score := categoryBase[d.Category]
-	if delta, ok := conditionDelta[d.Condition]; ok {
-		score += delta
-	}
+	score := cfg.CategoryBase(d.Category)
+	score += cfg.ConditionDelta(d.Condition)
 
 	// برچسب‌های وابسته به دسته فقط وقتی صادر می‌شوند که موضوع Q-code دقیقاً شناسایی شده باشد.
 	// اگر موضوع حدس زده شده (fallback حرف اول)، برچسبِ قاطع مثل RWY_CLOSED گمراه‌کننده است.
 	res.Tags = deriveTags(d.Category, d.Condition, ev.Text+" "+ev.HumanReadableText, d.Recognized)
-	score += tagBonus(res.Tags)
+	score += tagBonus(res.Tags, cfg)
 
 	res.BaseScore = clamp(score)
-	res.BaseLevel = level(res.BaseScore)
+	res.BaseLevel = cfg.Level(res.BaseScore)
+	// اطمینان: Q-code شناسایی‌شده → HIGH ، حدسِ حرف اول → LOW
+	if d.Recognized {
+		res.Confidence = ConfidenceHigh
+	} else {
+		res.Confidence = ConfidenceLow
+	}
+	return finalizeCorpus(res, cfg)
+}
+
+// finalizeCorpus وضعیت corpus و نسخه را تعیین می‌کند (بدون FlightPlan، امتیاز نهایی جعل نمی‌شود).
+func finalizeCorpus(res Result, cfg *ScoringConfig) Result {
+	res.ScoringVersion = cfg.Version
+	res.CorpusStatus = corpusStatus(res)
+	if res.CorpusStatus == CorpusContextRequired {
+		res.MissingData = append(res.MissingData, "flightPlan")
+	}
+	if res.Confidence == "" {
+		res.Confidence = ConfidenceMedium
+	}
 	return res
 }
 
+// corpusStatus بدون FlightPlan تعیین می‌کند این NOTAM چه وضعیتی دارد.
+func corpusStatus(res Result) string {
+	if res.Condition == "TT" || res.Condition == "CN" {
+		return CorpusInformationalOnly
+	}
+	// بستن کاملِ فرودگاه تقریباً مستقل از بستر است
+	if hasTagStr(res.Tags, TagAdClosed) {
+		return CorpusBaseOnly
+	}
+	return CorpusContextRequired
+}
+
+func hasTagStr(tags []string, t string) bool {
+	for _, x := range tags {
+		if x == t {
+			return true
+		}
+	}
+	return false
+}
+
 // analyzeFromText وقتی Q-code نیست: تحلیل بر اساس کلیدواژه‌های متن (E3-2).
-func analyzeFromText(ev messaging.NotamEvent) Result {
+func analyzeFromText(ev messaging.NotamEvent, cfg *ScoringConfig) Result {
 	text := strings.ToUpper(ev.Text + " " + ev.HumanReadableText)
-	res := Result{FromText: true, Category: qcode.CatOther}
+	res := Result{FromText: true, Category: qcode.CatOther, Confidence: ConfidenceMedium}
 
 	switch {
 	case strings.Contains(text, "FICON"):
@@ -213,8 +215,8 @@ func analyzeFromText(ev messaging.NotamEvent) Result {
 	res.Phases = categoryPhases[res.Category]
 	// در این مسیر دسته مستقیماً از کلیدواژه‌های متن آمده (نه حدسِ Q-code)، پس برچسب‌ها معتبرند.
 	res.Tags = deriveTags(res.Category, "", text, true)
-	res.BaseScore = clamp(res.BaseScore + tagBonus(res.Tags))
-	res.BaseLevel = level(res.BaseScore)
+	res.BaseScore = clamp(res.BaseScore + tagBonus(res.Tags, cfg))
+	res.BaseLevel = cfg.Level(res.BaseScore)
 	return res
 }
 
@@ -252,47 +254,21 @@ func deriveTags(category, condition, text string, subjectKnown bool) []string {
 	return tags
 }
 
-// tagBonus امتیاز اضافی برای پرچم‌های بحرانی.
-func tagBonus(tags []string) int {
+// tagBonus امتیاز اضافی پرچم‌های بحرانی را از config می‌خواند.
+func tagBonus(tags []string, cfg *ScoringConfig) int {
 	bonus := 0
 	for _, t := range tags {
-		switch t {
-		case TagAdClosed:
-			bonus += 12
-		case TagRwyClosed:
-			bonus += 10
-		case TagFICON:
-			bonus += 8
-		case TagILSOut, TagGPSOut:
-			bonus += 6
-		case TagObstacle:
-			bonus += 3
-		}
+		bonus += cfg.TagBonuses[t]
 	}
 	return bonus
 }
 
-// LevelFor سطح اهمیت را از امتیاز محاسبه می‌کند (همان آستانه‌های امتیاز پایه).
+// LevelFor سطح اهمیت را از امتیاز طبق آستانه‌های نسخهٔ فعال محاسبه می‌کند.
 // موتور بریفینگ برای امتیاز کانتکستی از همین تابع استفاده می‌کند تا سطوح یکسان بمانند.
-func LevelFor(score int) string { return level(score) }
+func LevelFor(score int) string { return Current.Level(score) }
 
 // Clamp امتیاز را در بازهٔ ۰..۱۰۰ نگه می‌دارد.
 func Clamp(score int) int { return clamp(score) }
-
-func level(score int) string {
-	switch {
-	case score >= 80:
-		return LevelCritical
-	case score >= 60:
-		return LevelHigh
-	case score >= 35:
-		return LevelMedium
-	case score >= 15:
-		return LevelLow
-	default:
-		return LevelInfo
-	}
-}
 
 func clamp(s int) int {
 	if s < 0 {
